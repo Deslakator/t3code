@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Открыть тред в T3 Code</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100svh;
+        display: grid;
+        place-items: center;
+        background: light-dark(#f5f5f5, #151515);
+        color: light-dark(#171717, #ededed);
+      }
+      main {
+        width: min(26rem, calc(100% - 3rem));
+        padding-block: 3rem;
+      }
+      h1 {
+        font-size: 1.6rem;
+      }
+      p {
+        line-height: 1.6;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-block: 1.5rem;
+      }
+      a {
+        color: inherit;
+      }
+      #open {
+        padding: 0.8rem 1.2rem;
+        border-radius: 0.6rem;
+        background: #7659e8;
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      #browser {
+        align-self: center;
+      }
+      [hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>T3 Code</p>
+      <h1>Вернуться к работе</h1>
+      <p id="description">Откройте тред в установленном приложении или продолжите в браузере.</p>
+      <nav id="actions" hidden>
+        <a id="open">Открыть в T3</a>
+        <a id="browser">Открыть в браузере</a>
+      </nav>
+      <p id="hint" hidden>
+        Если Telegram не открывает приложение, откройте эту страницу во внешнем браузере и нажмите
+        «Открыть в T3».
+      </p>
+      <noscript>Для открытия ссылки включите JavaScript.</noscript>
+    </main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const environment = params.get("environment");
+      const thread = params.get("thread");
+      const validId = (value) =>
+        typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9:._-]{0,511}$/.test(value);
+      if (validId(environment) && validId(thread)) {
+        const path = `${encodeURIComponent(environment)}/${encodeURIComponent(thread)}`;
+        document.getElementById("open").href = `t3code://threads/${path}`;
+        document.getElementById("browser").href = `/${path}`;
+        document.getElementById("actions").hidden = false;
+        document.getElementById("hint").hidden = false;
+        location.href = document.getElementById("open").href;
+      } else {
+        document.getElementById("description").textContent =
+          "В ссылке отсутствует или некорректно указан тред. Запросите новую ссылку.";
+      }
+    </script>
+  </body>
+</html>
