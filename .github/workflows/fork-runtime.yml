@@ -1,0 +1,102 @@
+name: Fork runtime
+run-name: Fork runtime ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Unique deployment request
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      T3CODE_TELEMETRY_CHANNEL: dev
+      T3CODE_RELAY_URL: ${{ vars.T3CODE_RELAY_URL }}
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ vars.T3CODE_CLERK_PUBLISHABLE_KEY }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ vars.T3CODE_CLERK_JWT_TEMPLATE }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ vars.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID }}
+    steps:
+      - name: Checkout exact dispatched commit
+        env:
+          CHECKOUT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "$CHECKOUT_SHA"
+          git sparse-checkout set --no-cone '/*' '!/.repos/'
+          git checkout --detach FETCH_HEAD
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install --frozen-lockfile
+
+      - name: Test deployment validation
+        run: node --test --test-concurrency=1 scripts/fork/deploy.test.mjs
+
+      - name: Check T3 Connect public configuration
+        run: |
+          for name in T3CODE_RELAY_URL T3CODE_CLERK_PUBLISHABLE_KEY T3CODE_CLERK_JWT_TEMPLATE T3CODE_CLERK_CLI_OAUTH_CLIENT_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing repository variable $name; refusing a build that would disable T3 Connect." >&2
+              exit 1
+            fi
+          done
+
+      - name: Assign unique runtime version
+        run: |
+          version="$(node -p "require('./apps/server/package.json').version.split('-')[0].split('+')[0]")-fork.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "RUNTIME_VERSION=$version" >> "$GITHUB_ENV"
+          node scripts/update-release-package-versions.ts "$version"
+
+      - name: Build server and web client
+        run: vp run --filter t3 build
+
+      - name: Build executable
+        run: node apps/server/scripts/cli.ts build-exe
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+
+      - name: Build resource monitor
+        run: |
+          cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml
+          mkdir -p apps/server/dist/resource-monitor/linux-x64
+          cp native/resource-monitor/target/release/t3-resource-monitor apps/server/dist/resource-monitor/linux-x64/
+
+      - name: Package runtime
+        run: node scripts/build-cli-archive.ts --platform linux --arch x64 --version "$RUNTIME_VERSION" --output-dir release-fork
+
+      - name: Smoke-test isolated runtime
+        run: node scripts/smoke-cli-archive.ts --archive "release-fork/t3-${RUNTIME_VERSION}-linux-x64.tar.gz" --expect-version "$RUNTIME_VERSION"
+
+      - name: Record artifact provenance
+        run: node scripts/fork/deploy.mjs manifest release-fork
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: fork-runtime
+          path: release-fork/
+          if-no-files-found: error
+          retention-days: 14

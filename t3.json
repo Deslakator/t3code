@@ -3,6 +3,21 @@
   "iconPath": "assets/dev/blueprint-web-apple-touch-180.png",
   "scripts": [
     {
+      "name": "Deploy branch via CI (restarts service)",
+      "command": "node scripts/fork/deploy.mjs deploy",
+      "icon": "build"
+    },
+    {
+      "name": "Roll back service (restarts service)",
+      "command": "node scripts/fork/deploy.mjs rollback",
+      "icon": "configure"
+    },
+    {
+      "name": "Service deployment status",
+      "command": "node scripts/fork/deploy.mjs status",
+      "icon": "debug"
+    },
+    {
       "name": "Setup Worktree",
       "command": "node scripts/setup-worktree.ts",
       "icon": "configure",
