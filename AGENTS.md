@@ -98,12 +98,13 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
-- Before you push, run `vp run check:changed`. It runs CI's fast checks for changed files: format, lint, knip, typecheck of affected packages and dependents, and tests beside changes. CI still runs the full test suites.
-- While you iterate, run `vp test run <files>`. For big files, add `-t "<name>"`.
-- Use `vp run typecheck`, not `npx tsc`; it caches per package. Both run tsc-rs (`typescript` is the `@tsc-rs/typescript` drop-in).
+- This machine also hosts the live development environment. Keep local verification scoped to the change and run commands sequentially, never in parallel.
+- Run focused tests with `vp test run <files> --maxWorkers=1 --no-file-parallelism`. For big files, add `-t "<name>"`. Scope formatting and lint to changed files as well.
+- Full verification belongs in CI. Do not automatically run `vp run check:changed`, knip, builds, or repo-wide checks, including before a push. Run them locally only when the developer explicitly requests them.
+- When typechecking is needed, target only the owning package with `vp run --filter <package> typecheck`, one package at a time. Do not use the root `vp run typecheck` or `npx tsc`.
 - Run `node -e` snippets from `apps/server` or the owning package. `effect` does not resolve from the repo root.
 - Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
-- **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
+- **Do not run repo-wide checks without an explicit request.** This includes `vp check`, `vp test run` without file paths, `vp run test`, `vp run -r test`, and `vp run -r typecheck`. CI owns the full suite.
 - Backend behavior changes ship with focused tests for that behavior.
 - Proof for a bug fix depends on the bug. Logic, data, state, and protocol bugs get a failing test first (the fewest that fail on `main` for that reason, in the module's existing test file), then the fix. Purely visual bugs (spacing, colour, alignment, a layout shift) get before/after captures as their proof and no test: do not add UI tests for nitpicks, and do not ask for one in review when a capture already shows it. A server-only fix with no visible surface ships the test plus a short runtime transcript.
 - The server is event-sourced, and side effects run after the command commits. In tests, drain the effect worker (`OrchestrationEffectWorkerV2.drain`) or await the specific persisted event or `Deferred` that marks the milestone. Never wait on sleeps or polling. A test that needs a timeout to pass is wrong. Concretely:
