@@ -20,7 +20,6 @@ import * as Queue from "effect/Queue";
 import * as TestClock from "effect/testing/TestClock";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
@@ -185,17 +184,15 @@ const setup = Effect.fn("TelegramTest.setup")(function* (
     }),
     Layer.mock(ProjectService.ProjectService)({
       getShell: () =>
-        Effect.succeed(
-          Option.some({
-            id: PROJECT_ID,
-            title: "Project",
-            workspaceRoot: "/workspace",
-            defaultModelSelection: null,
-            scripts: [],
-            createdAt: NOW,
-            updatedAt: NOW,
-          }),
-        ),
+        Effect.succeedSome({
+          id: PROJECT_ID,
+          title: "Project",
+          workspaceRoot: "/workspace",
+          defaultModelSelection: null,
+          scripts: [],
+          createdAt: NOW,
+          updatedAt: NOW,
+        }),
     }),
     Layer.mock(ServerEnvironment.ServerEnvironment)({
       getEnvironmentId: Effect.succeed(EnvironmentId.make("env-1")),
@@ -350,12 +347,12 @@ describe("Telegram notifications", () => {
       );
     }),
   );
-  it.effect("does not send active, interrupted, silent or child work", () =>
+  it.effect("does not send active, interrupted, stopped or child work", () =>
     Effect.gen(function* () {
       for (const override of [
         { status: "running" },
         { status: "interrupted" },
-        { latestRunSilent: true },
+        { latestRunStopRequested: true },
         {
           lineage: {
             rootThreadId: THREAD_ID,
@@ -369,6 +366,55 @@ describe("Telegram notifications", () => {
         yield* service.drain;
         assert.lengthOf(sent, 0);
       }
+    }),
+  );
+  it.effect.each(["beforeCacheExpires", "onReturn"] as const)(
+    "does not send successful automatic compaction (%s)",
+    (idleCompaction) =>
+      Effect.gen(function* () {
+        const { service, sent } = yield* setup({
+          messages: [message({ role: "user", text: "/compact", idleCompaction }), message()],
+        });
+        yield* service.notifyThread(THREAD_ID);
+        yield* service.drain;
+        assert.lengthOf(sent, 0);
+      }),
+  );
+  it.effect("does not send successful automatic compaction from older servers", () =>
+    Effect.gen(function* () {
+      const { service, sent } = yield* setup({
+        messages: [
+          message({ role: "user", text: "/compact", createdBy: "agent", creationSource: "server" }),
+          message(),
+        ],
+      });
+      yield* service.notifyThread(THREAD_ID);
+      yield* service.drain;
+      assert.lengthOf(sent, 0);
+    }),
+  );
+  it.effect("notifies when automatic compaction fails", () =>
+    Effect.gen(function* () {
+      const { service, sent } = yield* setup({
+        shell: { status: "failed", lastError: "Compaction failed" },
+        messages: [message({ role: "user", text: "/compact", idleCompaction: "onReturn" })],
+      });
+      yield* service.notifyThread(THREAD_ID);
+      yield* service.drain;
+      assert.equal(sent[0]?.rich_message.markdown, "❌ Project\nThread\n\nCompaction failed");
+    }),
+  );
+  it.effect("notifies when user-requested compaction completes", () =>
+    Effect.gen(function* () {
+      const { service, sent } = yield* setup({
+        messages: [
+          message({ role: "user", text: "/compact", createdBy: "user", creationSource: "web" }),
+          message(),
+        ],
+      });
+      yield* service.notifyThread(THREAD_ID);
+      yield* service.drain;
+      assert.lengthOf(sent, 1);
     }),
   );
   it.effect("bounds the excerpt and preserves Markdown for Telegram rich text", () =>

@@ -1,18 +1,19 @@
-import { spawnSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
-import * as fs from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import * as path from "node:path";
-import { setTimeout } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import * as HostProcess from "@t3tools/shared/HostProcess";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeTimersPromises from "node:timers/promises";
+import * as NodeURL from "node:url";
 
 const repository = "Deslakator/t3code";
 const workflow = "fork-runtime.yml";
-const root = fileURLToPath(new URL("../../", import.meta.url));
+const root = NodeURL.fileURLToPath(new URL("../../", import.meta.url));
 const runtimeVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
+  const result = NodeChildProcess.spawnSync(command, args, {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
@@ -28,18 +29,18 @@ function gh(args) {
 }
 
 function readJson(file) {
-  return JSON.parse(fs.readFileSync(file, "utf8"));
+  return JSON.parse(NodeFS.readFileSync(file, "utf8"));
 }
 
 function writeJson(file, value) {
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(temporary, file);
+  const temporary = `${file}.${NodeCrypto.randomUUID()}.tmp`;
+  NodeFS.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  NodeFS.renameSync(temporary, file);
 }
 
 async function checksum(file) {
-  const hash = createHash("sha256");
-  for await (const chunk of fs.createReadStream(file)) hash.update(chunk);
+  const hash = NodeCrypto.createHash("sha256");
+  for await (const chunk of NodeFS.createReadStream(file)) hash.update(chunk);
   return hash.digest("hex");
 }
 
@@ -66,14 +67,14 @@ async function manifest(directory) {
     version,
     archive,
     platform: "linux-x64",
-    sha256: await checksum(path.join(directory, archive)),
+    sha256: await checksum(NodePath.join(directory, archive)),
   };
   validateManifest(value, process.env.GITHUB_SHA);
-  writeJson(path.join(directory, "manifest.json"), value);
+  writeJson(NodePath.join(directory, "manifest.json"), value);
 }
 
 async function build(sha, branch, signal) {
-  const request = randomUUID();
+  const request = NodeCrypto.randomUUID();
   gh([
     "workflow",
     "run",
@@ -127,13 +128,13 @@ async function build(sha, branch, signal) {
         return runId;
       }
     }
-    await setTimeout(10_000, undefined, { signal });
+    await NodeTimersPromises.setTimeout(10_000, undefined, { signal });
   }
   throw new Error("Timed out waiting for GitHub. Service left unchanged.");
 }
 
 function serviceState(home) {
-  const state = readJson(path.join(home, "runtime/service-state.json"));
+  const state = readJson(NodePath.join(home, "runtime/service-state.json"));
   if (state.protocol !== 3 || state.update?.status === "pending") {
     throw new Error("Unsupported launcher protocol or another update is in progress.");
   }
@@ -143,17 +144,21 @@ function serviceState(home) {
 
 function activate(home, version) {
   if (!runtimeVersion.test(version)) throw new Error("Invalid target runtime version.");
-  const runtime = path.join(home, "runtime/versions", version);
-  if (fs.readFileSync(path.join(runtime, ".install-complete"), "utf8").trim() !== version) {
+  const runtime = NodePath.join(home, "runtime/versions", version);
+  if (NodeFS.readFileSync(NodePath.join(runtime, ".install-complete"), "utf8").trim() !== version) {
     throw new Error("Runtime installation is incomplete.");
   }
   console.log(
     `Switching service to ${version}. T3 will briefly disconnect. See ${home}/userdata/logs/boot-service.log`,
   );
-  run(path.join(runtime, "t3"), ["service", "install", "--base-dir", home, "--allow-downgrade"], {
-    stdio: "inherit",
-    env: { ...process.env, T3_BOOT_SERVICE_UNIT: "t3code.service" },
-  });
+  run(
+    NodePath.join(runtime, "t3"),
+    ["service", "install", "--base-dir", home, "--allow-downgrade"],
+    {
+      stdio: "inherit",
+      env: { ...process.env, T3_BOOT_SERVICE_UNIT: "t3code.service" },
+    },
+  );
 }
 
 async function deploy(home, history, signal) {
@@ -173,7 +178,7 @@ async function deploy(home, history, signal) {
   signal.throwIfAborted();
   if (serviceState(home).activeVersion !== initial)
     throw new Error("Service changed during build; retry deployment.");
-  const scratch = fs.mkdtempSync(path.join(tmpdir(), "t3-fork-deploy-"));
+  const scratch = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-fork-deploy-"));
   try {
     gh([
       "run",
@@ -186,27 +191,27 @@ async function deploy(home, history, signal) {
       "--dir",
       scratch,
     ]);
-    const value = readJson(path.join(scratch, "manifest.json"));
+    const value = readJson(NodePath.join(scratch, "manifest.json"));
     validateManifest(value, sha);
-    const archive = path.join(scratch, value.archive);
+    const archive = NodePath.join(scratch, value.archive);
     if ((await checksum(archive)) !== value.sha256) throw new Error("Runtime checksum mismatch.");
-    const staging = path.join(scratch, "unpacked");
-    fs.mkdirSync(staging);
+    const staging = NodePath.join(scratch, "unpacked");
+    NodeFS.mkdirSync(staging);
     run("tar", ["-xzf", archive, "-C", staging, "--strip-components=1"]);
-    const reported = run(path.join(staging, "t3"), ["--version"]);
+    const reported = run(NodePath.join(staging, "t3"), ["--version"]);
     if (!reported.endsWith(`v${value.version}`)) throw new Error("Runtime version mismatch.");
-    const target = path.join(home, "runtime/versions", value.version);
-    if (fs.existsSync(target))
+    const target = NodePath.join(home, "runtime/versions", value.version);
+    if (NodeFS.existsSync(target))
       throw new Error("Target runtime already exists; refusing to overwrite it.");
-    const installing = fs.mkdtempSync(path.join(home, "runtime/versions/.fork-install-"));
+    const installing = NodeFS.mkdtempSync(NodePath.join(home, "runtime/versions/.fork-install-"));
     try {
-      fs.cpSync(staging, installing, { recursive: true });
-      fs.writeFileSync(path.join(installing, ".install-complete"), `${value.version}\n`, {
+      NodeFS.cpSync(staging, installing, { recursive: true });
+      NodeFS.writeFileSync(NodePath.join(installing, ".install-complete"), `${value.version}\n`, {
         mode: 0o600,
       });
-      fs.renameSync(installing, target);
+      NodeFS.renameSync(installing, target);
     } finally {
-      fs.rmSync(installing, { recursive: true, force: true });
+      NodeFS.rmSync(installing, { recursive: true, force: true });
     }
     if (serviceState(home).activeVersion !== initial)
       throw new Error("Service changed during download; retry deployment.");
@@ -218,24 +223,29 @@ async function deploy(home, history, signal) {
     });
     return value.version;
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    NodeFS.rmSync(scratch, { recursive: true, force: true });
   }
 }
 
 export async function main(args, signal = new AbortController().signal) {
   if (args[0] === "manifest") return manifest(args[1]);
-  if (process.platform !== "linux" || process.arch !== "x64")
+  if (
+    HostProcess.Platform.defaultValue() !== "linux" ||
+    HostProcess.Architecture.defaultValue() !== "x64"
+  )
     throw new Error("This action targets the Linux x64 service.");
-  const home = path.resolve(process.env.T3CODE_DEPLOY_HOME || path.join(homedir(), ".t3"));
-  const runtime = path.join(home, "runtime");
-  const history = path.join(runtime, "fork-deployment.json");
-  const lock = path.join(runtime, ".fork-deploy-lock");
+  const home = NodePath.resolve(
+    process.env.T3CODE_DEPLOY_HOME || NodePath.join(NodeOS.homedir(), ".t3"),
+  );
+  const runtime = NodePath.join(home, "runtime");
+  const history = NodePath.join(runtime, "fork-deployment.json");
+  const lock = NodePath.join(runtime, ".fork-deploy-lock");
   if (args[0] === "status") {
     console.log(
       JSON.stringify(
         {
           service: serviceState(home),
-          deployment: fs.existsSync(history) ? readJson(history) : null,
+          deployment: NodeFS.existsSync(history) ? readJson(history) : null,
         },
         null,
         2,
@@ -245,7 +255,7 @@ export async function main(args, signal = new AbortController().signal) {
   }
   if (!["deploy", "rollback"].includes(args[0]))
     throw new Error("Usage: node scripts/fork/deploy.mjs deploy|rollback|status");
-  fs.mkdirSync(lock);
+  NodeFS.mkdirSync(lock);
   let target;
   try {
     if (args[0] === "deploy") target = await deploy(home, history, signal);
@@ -257,12 +267,15 @@ export async function main(args, signal = new AbortController().signal) {
       target = previous.previousVersion;
     }
   } finally {
-    fs.rmdirSync(lock);
+    NodeFS.rmdirSync(lock);
   }
   activate(home, target);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  NodePath.resolve(process.argv[1]) === NodeURL.fileURLToPath(import.meta.url)
+) {
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
   process.once("SIGTERM", () => controller.abort());

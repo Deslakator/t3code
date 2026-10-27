@@ -1,4 +1,8 @@
-import type { OrchestrationV2DomainEvent, ThreadId } from "@t3tools/contracts";
+import {
+  idleCompactionOf,
+  type OrchestrationV2DomainEvent,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { projectThreadAwarenessV2 } from "@t3tools/shared/agentAwareness";
@@ -91,7 +95,10 @@ const make = Effect.gen(function* () {
       )
     : null;
   if (config === null) {
-    return TelegramNotifications.of({ notifyThread: () => Effect.void, drain: Effect.void });
+    return TelegramNotifications.of({
+      notifyThread: Effect.fn("TelegramNotifications.notifyThread")(() => Effect.void),
+      drain: Effect.void,
+    });
   }
   const environmentId = yield* server.getEnvironmentId;
   const delivered = new Set<string>();
@@ -115,7 +122,8 @@ const make = Effect.gen(function* () {
       messageRunIds: [thread.latestRunId],
     });
     const userMessage = records.messages.find((message) => message.role === "user");
-    if (state.phase === "completed" && userMessage?.idleCompaction !== undefined) return;
+    if (state.phase === "completed" && userMessage && idleCompactionOf(userMessage) !== undefined)
+      return;
     const lastAnswer = records.messages.findLast(
       (message) => message.role === "assistant" && !message.streaming,
     );
@@ -152,10 +160,9 @@ const make = Effect.gen(function* () {
               }),
             ),
       ),
-      Effect.flatMap((result) =>
-        result.ok
-          ? Effect.succeed(result)
-          : Effect.fail(new TelegramDeliveryError({ retryable: false })),
+      Effect.filterOrFail(
+        (result) => result.ok,
+        () => new TelegramDeliveryError({ retryable: false }),
       ),
       Effect.retry({
         times: 2,
@@ -163,7 +170,7 @@ const make = Effect.gen(function* () {
         while: (error) => error.retryable,
       }),
       Effect.timeout("30 seconds"),
-      Effect.catch(() => Effect.succeed({ ok: false })),
+      Effect.orElseSucceed(() => ({ ok: false })),
     );
     // Do not log HTTP errors: Telegram embeds the bot token in the request URL.
     if (!result.ok) {
