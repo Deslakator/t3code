@@ -114,7 +114,7 @@ const setup = Effect.fn("TelegramTest.setup")(function* (
   } = {},
 ) {
   const sent: Array<{
-    text: string;
+    rich_message: { markdown: string };
     chat_id: string;
     reply_markup: { inline_keyboard: Array<Array<{ text: string; url: string }>> };
   }> = [];
@@ -126,7 +126,7 @@ const setup = Effect.fn("TelegramTest.setup")(function* (
   const client = HttpClient.make((request) =>
     Effect.sync(() => {
       httpCalls++;
-      assert.equal(request.url, "https://api.telegram.org/bot123:test-token/sendMessage");
+      assert.equal(request.url, "https://api.telegram.org/bot123:test-token/sendRichMessage");
       assert.equal(request.body._tag, "Uint8Array");
       if (request.body._tag === "Uint8Array")
         sent.push(JSON.parse(new TextDecoder().decode(request.body.body)));
@@ -314,7 +314,7 @@ describe("Telegram notifications", () => {
       yield* service.notifyThread(THREAD_ID);
       yield* service.drain;
       assert.lengthOf(sent, 1);
-      assert.equal(sent[0]?.text, "✅ Project\nThread\n\nFinished the work");
+      assert.equal(sent[0]?.rich_message.markdown, "✅ Project\nThread\n\nFinished the work");
       assert.equal(sent[0]?.chat_id, "-1234");
       assert.deepEqual(sent[0]?.reply_markup.inline_keyboard, [
         [
@@ -333,7 +333,21 @@ describe("Telegram notifications", () => {
       });
       yield* service.notifyThread(THREAD_ID);
       yield* service.drain;
-      assert.equal(sent[0]?.text, "❌ Project\nThread\n\nProvider failed");
+      assert.equal(sent[0]?.rich_message.markdown, "❌ Project\nThread\n\nProvider failed");
+    }),
+  );
+  it.effect("keeps thread titles literal while preserving answer formatting", () =>
+    Effect.gen(function* () {
+      const { service, sent } = yield* setup({
+        shell: { title: "# Thread *name*\nnext" },
+        messages: [message({ text: "## Result\n\n**Done** and [link](https://example.com)" })],
+      });
+      yield* service.notifyThread(THREAD_ID);
+      yield* service.drain;
+      assert.equal(
+        sent[0]?.rich_message.markdown,
+        "✅ Project\n\\# Thread \\*name\\* next\n\n## Result\n\n**Done** and [link](https://example.com)",
+      );
     }),
   );
   it.effect("does not send active, interrupted, silent or child work", () =>
@@ -357,15 +371,15 @@ describe("Telegram notifications", () => {
       }
     }),
   );
-  it.effect("bounds message text and leaves markup as plain text", () =>
+  it.effect("bounds the excerpt and preserves Markdown for Telegram rich text", () =>
     Effect.gen(function* () {
       const { service, sent } = yield* setup({
-        messages: [message({ text: "<b>" + "x".repeat(10000) })],
+        messages: [message({ text: "**Done**\n\n```ts\nconst x = 1;\n```\n" + "x".repeat(10000) })],
       });
       yield* service.notifyThread(THREAD_ID);
       yield* service.drain;
-      assert.isBelow(sent[0]!.text.length, 4096);
-      assert.include(sent[0]!.text, "<b>");
+      assert.isBelow(sent[0]!.rich_message.markdown.length, 4096);
+      assert.include(sent[0]!.rich_message.markdown, "**Done**\n\n```ts\nconst x = 1;\n```");
     }),
   );
   it.effect("does not mark rejected deliveries as sent or stop later work", () =>

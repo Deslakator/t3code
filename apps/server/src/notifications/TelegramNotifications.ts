@@ -65,6 +65,13 @@ function needsNotification(event: OrchestrationV2DomainEvent): boolean {
   }
 }
 
+function escapeMarkdownTitle(value: string): string {
+  return value
+    .slice(0, 200)
+    .replace(/[\\`*_{}[\]()<>#+.!|~=-]/g, "\\$&")
+    .replace(/[\r\n]/g, " ");
+}
+
 const make = Effect.gen(function* () {
   const environment = yield* HostProcess.Environment;
   const fs = yield* FileSystem.FileSystem;
@@ -121,12 +128,13 @@ const make = Effect.gen(function* () {
     url.searchParams.set("thread", threadId);
     const payload = {
       chat_id: config.chatId,
-      text: `${state.phase === "failed" ? "❌" : "✅"} ${project.value.title.slice(0, 200)}\n${thread.title.slice(0, 200)}\n\n${detail.slice(0, 2400)}`,
-      link_preview_options: { is_disabled: true },
+      rich_message: {
+        markdown: `${state.phase === "failed" ? "❌" : "✅"} ${escapeMarkdownTitle(project.value.title)}\n${escapeMarkdownTitle(thread.title)}\n\n${detail.slice(0, 2400)}`,
+      },
       reply_markup: { inline_keyboard: [[{ text: "Открыть в T3", url: url.href }]] },
     };
     const request = HttpClientRequest.post(
-      `https://api.telegram.org/bot${config.botToken}/sendMessage`,
+      `https://api.telegram.org/bot${config.botToken}/sendRichMessage`,
     ).pipe(HttpClientRequest.bodyJsonUnsafe(payload));
     const result = yield* client.execute(request).pipe(
       Effect.timeout("10 seconds"),
