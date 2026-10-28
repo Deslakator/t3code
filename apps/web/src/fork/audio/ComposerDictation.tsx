@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { DesktopDictation } from "./DesktopDictation";
+import { DesktopDictation, type DictationControls } from "./DesktopDictation";
+import { flushSync } from "react-dom";
+import type { DictationPhase } from "./session";
 
 type Editor = {
+  focus(): void;
   readSelectionRange(): { start: number; end: number };
   readSnapshot(): { contextIds: string[] };
   focusAt(cursor: number): void;
@@ -14,7 +17,9 @@ export function ComposerDictation(props: {
   promptRef: RefObject<string>;
   editorRef: RefObject<Editor | null>;
   disabled: boolean;
-  onBusyChange(busy: boolean): void;
+  controlsRef: RefObject<DictationControls | null>;
+  onPhaseChange(phase: DictationPhase): void;
+  onSubmit(): void;
   onPromptChange(
     text: string,
     cursor: number,
@@ -35,7 +40,10 @@ export function ComposerDictation(props: {
   return (
     <DesktopDictation
       disabled={props.disabled}
-      onBusyChange={props.onBusyChange}
+      controlsRef={props.controlsRef}
+      onPhaseChange={props.onPhaseChange}
+      onSubmit={props.onSubmit}
+      focusEditor={() => props.editorRef.current?.focus()}
       readDraft={() => {
         if (props.ownerRef.current !== props.ownerKey) return null;
         const text = props.promptRef.current;
@@ -51,7 +59,15 @@ export function ComposerDictation(props: {
       }}
       commitDraft={(text, cursor) => {
         const editor = props.editorRef.current;
-        props.onPromptChange(text, cursor, cursor, false, editor?.readSnapshot().contextIds ?? []);
+        flushSync(() => {
+          props.onPromptChange(
+            text,
+            cursor,
+            cursor,
+            false,
+            editor?.readSnapshot().contextIds ?? [],
+          );
+        });
         editor?.focusAt(cursor);
       }}
     />

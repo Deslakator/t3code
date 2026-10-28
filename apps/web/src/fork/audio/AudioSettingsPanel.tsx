@@ -4,6 +4,7 @@ import type { DesktopAudioSettings } from "@t3tools/contracts/fork/audio";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
+import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
 
 export function AudioSettingsPanel() {
   const bridge = audioClient.settings;
@@ -58,77 +59,87 @@ export function AudioSettingsPanel() {
       .finally(() => setBusy(false));
   }
   return (
-    <section id="audio" aria-labelledby="audio-title" className="space-y-4">
-      <h2 id="audio-title" className="text-sm font-medium">
-        Audio · OpenRouter dictation
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        These settings belong to this Mac and apply to every environment. Audio is sent directly to
-        OpenRouter for Russian transcription, including English technical terms.
-      </p>
-      <label className="flex items-center gap-3">
-        <Switch
-          checked={enabled}
-          onCheckedChange={setEnabled}
-          disabled={!settings || busy}
-          aria-label="Enable dictation"
-        />
-        Enable dictation
-      </label>
-      <label className="block space-y-2">
-        <span>OpenRouter API key</span>
-        <Input
-          type="password"
-          autoComplete="new-password"
-          value={key}
-          onChange={(event) => setKey(event.target.value)}
-          disabled={!settings || busy}
-          placeholder={
-            settings?.hasApiKey
-              ? "Key saved. Leave blank to keep it"
-              : "Paste your OpenRouter API key"
-          }
-        />
-      </label>
-      <label className="block space-y-2">
-        <span>Transcription model</span>
-        <Input
-          value={model}
-          onChange={(event) => setModel(event.target.value)}
-          disabled={!settings || busy}
-          spellCheck={false}
-        />
-      </label>
-      <p className="text-xs text-muted-foreground">
-        Use a speech-to-text model such as openai/whisper-large-v3-turbo. The saved key is encrypted
-        on this Mac and is never returned to this screen. No application restart is needed.
-      </p>
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={
-            !settings || busy || !model.trim() || (enabled && !settings.hasApiKey && !key.trim())
-          }
-          onClick={() => void save()}
-        >
-          Save audio settings
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!settings?.hasApiKey || busy}
-          onClick={() => void save(true)}
-        >
-          Remove key
-        </Button>
-      </div>
-      {message && (
-        <p role="status" className="text-sm">
-          {message}
-        </p>
-      )}
-    </section>
+    <SettingsSection id="audio" title="Audio">
+      <SettingsRow
+        title="Voice dictation"
+        description="Dictate in Russian with English technical terms. Applies to this Mac across all environments."
+        control={
+          <Switch
+            checked={enabled}
+            onCheckedChange={setEnabled}
+            disabled={!settings || busy}
+            aria-label="Enable dictation"
+          />
+        }
+      />
+      <SettingsRow
+        title="OpenRouter API key"
+        description={
+          settings?.hasApiKey
+            ? "Key saved securely on this Mac. Leave blank to keep it."
+            : "Your recordings are sent to OpenRouter and charged to your account."
+        }
+        control={
+          <div className="w-full sm:w-72">
+            <Input
+              type="password"
+              autoComplete="new-password"
+              aria-label="OpenRouter API key"
+              value={key}
+              onChange={(event) => setKey(event.target.value)}
+              disabled={!settings || busy}
+              placeholder={settings?.hasApiKey ? "Key saved" : "Paste API key"}
+            />
+          </div>
+        }
+      />
+      <SettingsRow
+        title="Transcription model"
+        description="Use an OpenRouter speech-to-text model. Changes apply without restarting."
+        control={
+          <div className="w-full sm:w-72">
+            <Input
+              aria-label="Transcription model"
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              disabled={!settings || busy}
+              spellCheck={false}
+            />
+          </div>
+        }
+      />
+      <SettingsRow
+        title="Audio settings"
+        description="The saved API key stays on this Mac."
+        status={message ? <span role="status">{message}</span> : undefined}
+        control={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                !settings ||
+                busy ||
+                !model.trim() ||
+                (enabled && !settings.hasApiKey && !key.trim())
+              }
+              onClick={() => void save()}
+            >
+              Save
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!settings?.hasApiKey || busy}
+              onClick={() => void save(true)}
+            >
+              Remove key
+            </Button>
+          </div>
+        }
+      />
+    </SettingsSection>
   );
 }

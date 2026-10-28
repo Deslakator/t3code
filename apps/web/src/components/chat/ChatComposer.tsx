@@ -1,3 +1,5 @@
+import type { DictationControls } from "../../fork/audio/DesktopDictation";
+import type { DictationPhase } from "../../fork/audio/session";
 import { ComposerDictation } from "../../fork/audio/ComposerDictation";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
@@ -1088,7 +1090,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pendingUserInputs.length === 0;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
-  const [dictationBusy, setDictationBusy] = useState(false);
+  const dictationRef = useRef<DictationControls | null>(null);
+  const [dictationPhase, setDictationPhase] = useState<DictationPhase>("idle");
+  const dictationBusy = dictationPhase !== "idle";
+  const dictationRecording = dictationPhase === "recording";
   const pasteAsTextShortcutUntilRef = useRef(0);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
@@ -2084,8 +2089,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
+    if (dictationRef.current?.submit()) {
+      event?.preventDefault();
+      return;
+    }
     if (
-      dictationBusy ||
       noProviderAvailable ||
       isSendDisabled ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
@@ -3318,6 +3326,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     <form
       ref={composerFormRef}
       onSubmit={submitComposerStable}
+      onKeyDownCapture={(event) => dictationRef.current?.keyDown(event)}
       onPointerDownCapture={(event) => {
         const target = event.target;
         if (isInsideRestingComposerControlScope(target)) return;
@@ -3616,20 +3625,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
-              {window.desktopBridge?.getClientPlatform?.() === "darwin" &&
-                pendingUserInputs.length === 0 && (
-                  <ComposerDictation
-                    key={composerDraftTargetKey}
-                    ownerKey={composerDraftTargetKey}
-                    ownerRef={composerDraftTargetKeyRef}
-                    prompt={prompt}
-                    promptRef={promptRef}
-                    editorRef={composerEditorRef}
-                    onPromptChange={onPromptChangeStable}
-                    onBusyChange={setDictationBusy}
-                    disabled={projectSelectionRequired}
-                  />
-                )}
               {composerAttachmentMediaRow}
 
               {composerAttachmentFileList}
@@ -3792,6 +3787,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   className="flex shrink-0 flex-nowrap items-center justify-end gap-2"
                 >
                   {composerAttachButton}
+                  {window.desktopBridge?.getClientPlatform?.() === "darwin" &&
+                    pendingUserInputs.length === 0 && (
+                      <ComposerDictation
+                        key={composerDraftTargetKey}
+                        ownerKey={composerDraftTargetKey}
+                        ownerRef={composerDraftTargetKeyRef}
+                        prompt={prompt}
+                        promptRef={promptRef}
+                        editorRef={composerEditorRef}
+                        onPromptChange={onPromptChangeStable}
+                        controlsRef={dictationRef}
+                        onPhaseChange={setDictationPhase}
+                        onSubmit={submitComposerStable}
+                        disabled={projectSelectionRequired}
+                      />
+                    )}
                   <ComposerFooterPrimaryActions
                     compact={isComposerResting || isComposerPrimaryActionsCompact}
                     canOperateThread={canOperateThread}
@@ -3821,10 +3832,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       },
                     )}
                     showPlanFollowUpPrompt={
-                      pendingUserInputs.length === 0 && showPlanFollowUpPrompt
+                      !dictationBusy && pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
                     promptHasText={prompt.trim().length > 0}
-                    isSendBusy={isSendBusy || dictationBusy}
+                    isSendBusy={isSendBusy || (dictationBusy && !dictationRecording)}
                     sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
@@ -3833,8 +3844,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       projectSelectionRequired
                     }
                     isPreparingWorktree={isPreparingWorktree}
-                    hasSendableContent={composerSendState.hasSendableContent}
-                    canResume={showResumeAction}
+                    hasSendableContent={composerSendState.hasSendableContent || dictationRecording}
+                    canResume={!dictationBusy && showResumeAction}
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     isEditingQueuedMessage={isEditingQueuedMessage}
                     onSubmitMessage={handleSubmitMessageStable}

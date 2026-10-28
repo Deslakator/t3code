@@ -1,31 +1,46 @@
-import { useEffect, useRef, useState } from "react";
-import { Mic, Square, X } from "lucide-react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { Mic, Square } from "lucide-react";
 import { DICTATION_MAX_SECONDS } from "@t3tools/contracts/fork/audio";
 import { audioClient, AUDIO_SETTINGS_CHANGED } from "./client";
-import { resolveTranscriptCommit, type VoiceDraftSnapshot } from "./transcript";
+import type { VoiceDraftSnapshot } from "./transcript";
+import { completeDictation, type DictationPhase, type TranscriptionOperation } from "./session";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
-type Operation = {
-  cancelled: boolean;
+export interface DictationControls {
+  submit(): boolean;
+  keyDown(event: KeyboardEvent<HTMLElement>): void;
+}
+
+type Operation = TranscriptionOperation & {
   stream?: MediaStream;
   recorder?: MediaRecorder;
   timer?: ReturnType<typeof setInterval>;
-  controller: AbortController;
   chunks: Blob[];
-  captured: VoiceDraftSnapshot;
 };
 
 export function DesktopDictation(props: {
   disabled: boolean;
-  onBusyChange: (busy: boolean) => void;
+  controlsRef: RefObject<DictationControls | null>;
+  onPhaseChange: (phase: DictationPhase) => void;
+  onSubmit: () => void;
+  focusEditor: () => void;
   readDraft: () => VoiceDraftSnapshot | null;
   commitDraft: (text: string, cursor: number) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "preparing" | "recording" | "transcribing">("idle");
+  const [phase, setPhase] = useState<DictationPhase>("idle");
   const changePhase = useStableCallback((next: typeof phase) => {
     setPhase(next);
-    props.onBusyChange(next !== "idle");
+    props.onPhaseChange(next);
   });
   const [enabled, setEnabled] = useState(false);
   const [seconds, setSeconds] = useState(0);
@@ -70,57 +85,96 @@ export function DesktopDictation(props: {
     const onHidden = () => {
       if (document.hidden) cancel();
     };
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || !active.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancel();
+    };
+    document.addEventListener("keydown", onEscape, true);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pagehide", cancel);
     return () => {
       disposed = true;
       window.removeEventListener(AUDIO_SETTINGS_CHANGED, refresh);
+      document.removeEventListener("keydown", onEscape, true);
       document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", cancel);
       cancel();
     };
   }, [cancel]);
 
+  const submit = useStableCallback(() => {
+    const op = active.current;
+    if (!op || op.cancelled) return false;
+    op.sendAfterTranscription = true;
+    if (op.recorder?.state === "recording") op.recorder.stop();
+    return true;
+  });
+  useImperativeHandle(
+    props.controlsRef,
+    () => ({
+      submit,
+      keyDown(event) {
+        if (!active.current || event.nativeEvent.isComposing) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          cancel();
+        } else if (
+          event.key === "Enter" &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) submit();
+        }
+      },
+    }),
+    [submit, cancel],
+  );
+  const onSubmit = useStableCallback(props.onSubmit);
   async function transcribe(op: Operation) {
     release(op);
     if (op.cancelled) return;
     changePhase("transcribing");
-    await Promise.resolve()
-      .then(() => {
+    await completeDictation(op, {
+      transcribe: (signal) => {
         const recording = new Blob(op.chunks, { type: op.recorder?.mimeType ?? "" });
         op.chunks = [];
-        return audioClient.transcribe(recording, op.controller.signal);
-      })
-      .then((text) => {
-        if (op.cancelled) return;
-        const insertion = resolveTranscriptCommit(op.captured, readDraft(), text, "ru");
-        if (insertion.kind === "commit") commitDraft(insertion.text, insertion.selection.end);
-        else {
-          setRecovered(text);
-          setError("The draft changed. Copy the recognized text below.");
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!op.cancelled)
-          setError(cause instanceof Error ? cause.message : "Could not transcribe this recording.");
-      })
-      .finally(() => {
-        op.controller.abort();
+        return audioClient.transcribe(recording, signal);
+      },
+      readDraft,
+      commit: commitDraft,
+      recover: (text) => {
+        setRecovered(text);
+        setError("The draft changed. Copy the recognized text below.");
+      },
+      fail: (cause) =>
+        setError(cause instanceof Error ? cause.message : "Could not transcribe this recording."),
+      complete: () => {
         if (active.current === op) {
           active.current = null;
           changePhase("idle");
         }
-      });
+      },
+      submit: onSubmit,
+    });
   }
   async function start() {
     if (active.current || props.disabled || !enabled) return;
     const captured = readDraft();
     if (!captured) return;
+    props.focusEditor();
     const op: Operation = {
       cancelled: false,
       chunks: [],
       captured,
       controller: new AbortController(),
+      sendAfterTranscription: false,
     };
     active.current = op;
     setError(null);
@@ -155,6 +209,7 @@ export function DesktopDictation(props: {
       };
       op.recorder.start(1000);
       changePhase("recording");
+      if (op.sendAfterTranscription) op.recorder.stop();
       let elapsed = 0;
       op.timer = setInterval(() => {
         elapsed += 1;
@@ -174,58 +229,62 @@ export function DesktopDictation(props: {
     }
   }
   if (!enabled) return null;
+  const label =
+    phase === "recording" ? "Stop dictation and insert text" : "Start Russian dictation";
   return (
-    <div className="flex flex-wrap items-center gap-2 py-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label={
-          phase === "recording" ? "Stop dictation and transcribe" : "Start Russian dictation"
-        }
-        disabled={
-          phase === "preparing" || phase === "transcribing" || (phase === "idle" && props.disabled)
-        }
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => {
-          if (phase === "recording") active.current?.recorder?.stop();
-          else void start();
-        }}
-      >
-        {phase === "recording" ? <Square className="size-4" /> : <Mic className="size-4" />}
-      </Button>
+    <div className="relative flex shrink-0 items-center gap-2">
       {phase !== "idle" && (
-        <>
-          <span role="status" className="text-xs text-muted-foreground">
-            {phase === "recording"
-              ? `Recording ${seconds}s`
-              : phase === "preparing"
-                ? "Preparing microphone…"
-                : "Transcribing…"}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Cancel dictation"
-            onClick={cancel}
-          >
-            <X className="size-4" />
-          </Button>
-        </>
-      )}
-      {error && (
-        <span role="alert" className="text-xs text-destructive">
-          {error}
+        <span role="status" className="whitespace-nowrap text-xs text-muted-foreground">
+          {phase === "recording"
+            ? `Recording ${seconds}s`
+            : phase === "preparing"
+              ? "Preparing…"
+              : "Transcribing…"}
         </span>
       )}
-      {recovered && (
-        <textarea
-          aria-label="Recognized text from previous draft"
-          readOnly
-          value={recovered}
-          className="w-full rounded border p-2 text-sm"
-        />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={label}
+              disabled={
+                phase === "preparing" ||
+                phase === "transcribing" ||
+                (phase === "idle" && props.disabled)
+              }
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (phase === "recording") active.current?.recorder?.stop();
+                else void start();
+              }}
+            />
+          }
+        >
+          {phase === "recording" ? <Square className="size-4" /> : <Mic className="size-4" />}
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {phase === "recording"
+            ? "Stop to insert · Enter to send · Esc to cancel"
+            : "Dictate in Russian"}
+        </TooltipPopup>
+      </Tooltip>
+      {error && (
+        <div className="absolute right-0 bottom-full z-10 mb-2 w-72 max-w-[80vw] space-y-2 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md">
+          <p role="alert" className="text-xs">
+            {error}
+          </p>
+          {recovered && (
+            <Textarea
+              aria-label="Recognized text from previous draft"
+              readOnly
+              value={recovered}
+              size="sm"
+            />
+          )}
+        </div>
       )}
     </div>
   );
