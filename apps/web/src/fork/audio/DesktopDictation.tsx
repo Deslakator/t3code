@@ -85,27 +85,32 @@ export function DesktopDictation(props: {
     release(op);
     if (op.cancelled) return;
     changePhase("transcribing");
-    try {
-      const recording = new Blob(op.chunks, { type: op.recorder?.mimeType ?? "" });
-      op.chunks = [];
-      const text = await audioClient.transcribe(recording, op.controller.signal);
-      if (op.cancelled) return;
-      const insertion = resolveTranscriptCommit(op.captured, readDraft(), text, "ru");
-      if (insertion.kind === "commit") commitDraft(insertion.text, insertion.selection.end);
-      else {
-        setRecovered(text);
-        setError("The draft changed. Copy the recognized text below.");
-      }
-    } catch (cause) {
-      if (!op.cancelled)
-        setError(cause instanceof Error ? cause.message : "Could not transcribe this recording.");
-    } finally {
-      op.controller.abort();
-      if (active.current === op) {
-        active.current = null;
-        changePhase("idle");
-      }
-    }
+    await Promise.resolve()
+      .then(() => {
+        const recording = new Blob(op.chunks, { type: op.recorder?.mimeType ?? "" });
+        op.chunks = [];
+        return audioClient.transcribe(recording, op.controller.signal);
+      })
+      .then((text) => {
+        if (op.cancelled) return;
+        const insertion = resolveTranscriptCommit(op.captured, readDraft(), text, "ru");
+        if (insertion.kind === "commit") commitDraft(insertion.text, insertion.selection.end);
+        else {
+          setRecovered(text);
+          setError("The draft changed. Copy the recognized text below.");
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!op.cancelled)
+          setError(cause instanceof Error ? cause.message : "Could not transcribe this recording.");
+      })
+      .finally(() => {
+        op.controller.abort();
+        if (active.current === op) {
+          active.current = null;
+          changePhase("idle");
+        }
+      });
   }
   async function start() {
     if (active.current || props.disabled || !enabled) return;
@@ -152,7 +157,8 @@ export function DesktopDictation(props: {
       changePhase("recording");
       let elapsed = 0;
       op.timer = setInterval(() => {
-        setSeconds(++elapsed);
+        elapsed += 1;
+        setSeconds(elapsed);
         if (elapsed >= DICTATION_MAX_SECONDS && op.recorder?.state === "recording")
           op.recorder.stop();
       }, 1000);

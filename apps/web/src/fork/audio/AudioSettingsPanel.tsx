@@ -36,23 +36,26 @@ export function AudioSettingsPanel() {
     if (!bridge) return;
     setBusy(true);
     setMessage("");
-    try {
-      const value = await bridge.saveSettings({
-        enabled: removeKey ? false : enabled,
-        model: model.trim(),
-        ...(removeKey ? { apiKey: "" } : key.trim() ? { apiKey: key.trim() } : {}),
-      });
-      setSettings(value);
-      setEnabled(value.enabled);
-      setModel(value.model);
-      setKey("");
-      setMessage(removeKey ? "Key removed; dictation disabled." : "Audio settings saved.");
-      window.dispatchEvent(new Event(AUDIO_SETTINGS_CHANGED));
-    } catch {
-      setMessage("Could not save audio settings. Check macOS secure storage and file access.");
-    } finally {
-      setBusy(false);
-    }
+    await Promise.resolve()
+      .then(() =>
+        bridge.saveSettings({
+          enabled: removeKey ? false : enabled,
+          model: model.trim(),
+          ...(removeKey ? { apiKey: "" } : key.trim() ? { apiKey: key.trim() } : {}),
+        }),
+      )
+      .then((value) => {
+        setSettings(value);
+        setEnabled(value.enabled);
+        setModel(value.model);
+        setKey("");
+        setMessage(removeKey ? "Key removed; dictation disabled." : "Audio settings saved.");
+        window.dispatchEvent(new Event(AUDIO_SETTINGS_CHANGED));
+      })
+      .catch(() => {
+        setMessage("Could not save audio settings. Check macOS secure storage and file access.");
+      })
+      .finally(() => setBusy(false));
   }
   return (
     <section id="audio" aria-labelledby="audio-title" className="space-y-4">
