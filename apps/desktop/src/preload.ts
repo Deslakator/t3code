@@ -1,3 +1,4 @@
+import { installForkAudioBridge } from "./fork/audio/preload.ts";
 import type {
   DesktopBridge,
   DesktopPreviewOpenLinkEvent,
@@ -441,3 +442,5 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     },
   },
 } satisfies DesktopBridge);
+
+installForkAudioBridge();

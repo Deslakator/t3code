@@ -1,3 +1,4 @@
+import { ComposerDictation } from "../../fork/audio/ComposerDictation";
 import { useComposerTypingGuard } from "./useComposerTypingGuard";
 import { insertAttachmentReferencesForDraft } from "./composerAttachmentReferences";
 import { DESKTOP_PASTE_AS_TEXT_EVENT } from "../../lib/desktopPasteAsText";
@@ -1087,6 +1088,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     pendingUserInputs.length === 0;
 
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
+  const [dictationBusy, setDictationBusy] = useState(false);
   const pasteAsTextShortcutUntilRef = useRef(0);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
@@ -1281,6 +1283,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const showResumeAction =
     canResume && !composerDraftHasUserContent(composerDraft) && !isEditingQueuedMessage;
   const collapsedComposerPrimaryActionDisabled =
+    dictationBusy ||
     phase === "running" ||
     isSendBusy ||
     isSendDisabled ||
@@ -2082,6 +2085,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     submissionIntent?: ComposerSubmissionIntent,
   ) => {
     if (
+      dictationBusy ||
       noProviderAvailable ||
       isSendDisabled ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)
@@ -2173,6 +2177,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const saveCitationDraftToPromptStable = useStableCallback(saveCitationDraftToPrompt);
   const compactThreadContext = () => {
     if (
+      dictationBusy ||
       !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope) ||
       compactDisabled ||
       noProviderAvailable ||
@@ -3611,6 +3616,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
+              {window.desktopBridge?.getClientPlatform?.() === "darwin" &&
+                pendingUserInputs.length === 0 && (
+                  <ComposerDictation
+                    key={composerDraftTargetKey}
+                    ownerKey={composerDraftTargetKey}
+                    ownerRef={composerDraftTargetKeyRef}
+                    prompt={prompt}
+                    promptRef={promptRef}
+                    editorRef={composerEditorRef}
+                    onPromptChange={onPromptChangeStable}
+                    onBusyChange={setDictationBusy}
+                    disabled={projectSelectionRequired}
+                  />
+                )}
               {composerAttachmentMediaRow}
 
               {composerAttachmentFileList}
@@ -3712,7 +3731,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       canInterrupt={false}
                       showPlanFollowUpPrompt={false}
                       promptHasText={false}
-                      isSendBusy={isSendBusy}
+                      isSendBusy={isSendBusy || dictationBusy}
                       sendDisabledReason={sendDisabledReason}
                       isConnecting={isConnecting}
                       isEnvironmentUnavailable={
@@ -3805,7 +3824,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
                     promptHasText={prompt.trim().length > 0}
-                    isSendBusy={isSendBusy}
+                    isSendBusy={isSendBusy || dictationBusy}
                     sendDisabledReason={sendDisabledReason}
                     isConnecting={isConnecting}
                     isEnvironmentUnavailable={
