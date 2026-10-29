@@ -1,3 +1,4 @@
+import { prepareRetry } from "../fork/overload-recovery/OverloadRecoveryHook.ts";
 import type {
   GuestShareId,
   OrchestrationV2SearchThreadInput,
@@ -4988,6 +4989,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     effects: Ref.Ref<Array<PendingOrchestrationEffectV2>>,
   ) {
     let projection = yield* getProjectionWithPendingEvents(command.threadId, events);
+    const forked = yield* prepareRetry(command, projection, emit(events, command), stopReachedRun);
+    if (forked === null) return;
+    projection = forked;
     if (command.manualContinuationOfRunId !== undefined) {
       const source = projection.runs.find((run) => run.id === command.manualContinuationOfRunId);
       const limited = latestRootProviderFailure(source ?? null, projection.turnItems);

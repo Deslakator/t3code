@@ -186,6 +186,14 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 - `packages/client-runtime` - client code shared by web and mobile.
 - `.repos/` - vendored read-only references. Prefer their patterns over invented ones. Never edit or import from them. Sync with `vpr sync:repos` when bumping the matching dependency. If it is missing (sparse checkout), read a file with `git show origin/main:.repos/<path>`.
 
+## Fork-specific changes
+
+- Implement this fork's features separately from upstream code by default, so merging upstream remains straightforward.
+- Put feature logic, workers, helpers, and their tests under the owning package's `src/fork/<feature>/`. Put fork-specific contract schemas under `packages/contracts/src/fork/`.
+- Keep upstream files to the smallest integration points: imports, calls to fork functions, layer registration, and schema field spreads. Aim for one to three integration lines per location, plus imports. Move decisions and behavior into the fork module instead of expanding those hooks.
+- Keep tests for fork behavior alongside the fork implementation. Do not add fork-specific test blocks to upstream test files; run focused tests for our functions. Broaden verification only when a change actually affects upstream behavior or the maintainer requests it.
+- Reuse existing services and execution paths through these hooks. Preserve their transactions, permissions, cancellation, and duplicate-delivery checks; do not bypass them to reduce the diff or refactor upstream systems merely to accommodate a fork feature.
+
 ## Taste
 
 - Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
