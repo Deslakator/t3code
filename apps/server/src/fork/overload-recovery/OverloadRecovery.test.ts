@@ -7,6 +7,7 @@ import {
   CommandId,
   EventId,
   type OrchestrationV2DomainEvent,
+  type OrchestrationV2AppThread,
   MessageId,
   NodeId,
   ProviderInstanceId,
@@ -173,7 +174,9 @@ describe("overload recovery", () => {
   });
 });
 
-type MetadataEvent = Extract<OrchestrationV2DomainEvent, { type: "thread.metadata-updated" }>;
+type MetadataEvent = Extract<OrchestrationV2DomainEvent, { payload: OrchestrationV2AppThread }> & {
+  type: "thread.metadata-updated";
+};
 
 function eventWriter() {
   const written: MetadataEvent[] = [];

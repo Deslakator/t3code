@@ -8,7 +8,7 @@ import * as ProjectionStore from "../../orchestration-v2/ProjectionStore.ts";
 import * as ThreadManagement from "../../orchestration-v2/ThreadManagementService.ts";
 import { OVERLOAD_RECOVERY_MAX_ATTEMPTS, overloadRecoveryCommand } from "./OverloadRecovery.ts";
 
-export const sweep = Effect.fn("OverloadRecoveryWorker.sweep")(function* () {
+const sweep = Effect.fn("OverloadRecoveryWorker.sweep")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const projections = yield* ProjectionStore.ProjectionStoreV2;
   const threads = yield* ThreadManagement.ThreadManagementService;
@@ -57,7 +57,7 @@ export const sweep = Effect.fn("OverloadRecoveryWorker.sweep")(function* () {
   }
 });
 
-export const layer = Layer.effectDiscard(
+const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const scheduler = yield* Scheduler.Scheduler;
     yield* scheduler.register("overload-recovery", sweep());

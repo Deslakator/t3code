@@ -1,5 +1,6 @@
 import type {
   OrchestrationV2Command,
+  OrchestrationV2AppThread,
   OrchestrationV2DomainEvent,
   OrchestrationV2ThreadProjection,
   RunId,
@@ -11,7 +12,9 @@ import { applyToProjection } from "../../orchestration-v2/ProjectionStore.ts";
 import { overloadRecoveryCommand } from "./OverloadRecovery.ts";
 
 type DispatchCommand = Extract<OrchestrationV2Command, { type: "message.dispatch" }>;
-type MetadataEvent = Extract<OrchestrationV2DomainEvent, { type: "thread.metadata-updated" }>;
+type MetadataEvent = Extract<OrchestrationV2DomainEvent, { payload: OrchestrationV2AppThread }> & {
+  type: "thread.metadata-updated";
+};
 
 export const prepareRetry = Effect.fn("OverloadRecovery.prepareDispatch")(function* <E, R, E2, R2>(
   command: DispatchCommand,
