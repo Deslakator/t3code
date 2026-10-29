@@ -14,7 +14,10 @@ const RETRY_DELAY_MS = 5_000;
 export const OVERLOAD_RECOVERY_MAX_ATTEMPTS = 5;
 
 export function overloadRecoveryCommand(
-  projection: OrchestrationV2ThreadProjection,
+  projection: Pick<
+    OrchestrationV2ThreadProjection,
+    "thread" | "runs" | "messages" | "runtimeRequests" | "turnItems"
+  >,
   nowMs: number,
 ) {
   const { thread } = projection;
