@@ -144,6 +144,49 @@ describe("overload recovery", () => {
       creationSource: "server",
     });
   });
+  it("recovers when an older PR notification appears after the current message", () => {
+    const { projection, now } = fixture();
+    const notification = {
+      ...projection.messages[0]!,
+      id: MessageId.make("message:pr-watch:older"),
+      runId: RunId.make("older-run"),
+      creationSource: "server" as const,
+      text: "Update on pull request",
+      createdAt: DateTime.subtract(now, { days: 1 }),
+    };
+    expect(
+      overloadRecoveryCommand(
+        { ...projection, messages: [...projection.messages, notification] },
+        DateTime.toEpochMillis(now) + 5000,
+      ),
+    ).not.toBeNull();
+  });
+
+  it.each([0, 1])(
+    "rejects new input ordered before the source with a %s millisecond offset",
+    (offset) => {
+      const { projection, now } = fixture();
+      const newer = {
+        ...projection.messages[0]!,
+        id: MessageId.make("newer-input"),
+        createdAt: DateTime.add(now, { milliseconds: offset }),
+      };
+      expect(
+        overloadRecoveryCommand(
+          { ...projection, messages: [newer, ...projection.messages] },
+          DateTime.toEpochMillis(now) + 5000,
+        ),
+      ).toBeNull();
+    },
+  );
+
+  it("requires the failed run's source message", () => {
+    const { projection, now } = fixture();
+    expect(
+      overloadRecoveryCommand({ ...projection, messages: [] }, DateTime.toEpochMillis(now) + 5000),
+    ).toBeNull();
+  });
+
   it("preserves the retry budget across failed automatic continuations", () => {
     const { projection, now } = fixture();
     const epoch = DateTime.toEpochMillis(now) + 5000;
