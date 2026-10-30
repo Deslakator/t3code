@@ -23,6 +23,9 @@ export function overloadRecoveryCommand(
   const { thread } = projection;
   const run = latestExecutedRun(projection.runs);
   const failure = latestRootProviderFailure(run, projection.turnItems);
+  const sourceMessage = projection.messages.find(
+    (message) => message.role === "user" && message.id === run?.userMessageId,
+  );
   if (
     run?.status !== "failed" ||
     run.completedAt === null ||
@@ -39,7 +42,14 @@ export function overloadRecoveryCommand(
     ) ||
     projection.runtimeRequests.some((request) => request.status === "pending") ||
     projection.runs.some((candidate) => candidate.status === "queued") ||
-    projection.messages.findLast((message) => message.role === "user")?.id !== run.userMessageId ||
+    sourceMessage === undefined ||
+    projection.messages.some(
+      (message) =>
+        message.role === "user" &&
+        message.id !== sourceMessage.id &&
+        DateTime.toEpochMillis(message.createdAt) >=
+          DateTime.toEpochMillis(sourceMessage.createdAt),
+    ) ||
     DateTime.toEpochMillis(run.completedAt) + RETRY_DELAY_MS > nowMs
   )
     return null;
