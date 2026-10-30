@@ -43,7 +43,6 @@ const make = Effect.gen(function* () {
           headers: { Authorization: `Bearer ${input.apiKey}` },
           body: HttpBody.jsonUnsafe({
             model: input.model,
-            language: "ru",
             input_audio: { data: Buffer.from(input.audio).toString("base64"), format: "wav" },
           }),
         })
