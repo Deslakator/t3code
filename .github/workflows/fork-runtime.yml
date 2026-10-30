@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   verify:
-    uses: ./.github/workflows/ci.yml
+    uses: ./.github/workflows/fork-ci.yml
+    with:
+      build_runtime: false
 
   build:
     needs: verify
@@ -48,10 +50,6 @@ jobs:
 
       - name: Install dependencies
         run: vp install --frozen-lockfile
-
-      - name: Test deployment validation
-        working-directory: scripts
-        run: vp test run --config ../vite.config.ts fork/deploy.test.mjs --maxWorkers=1 --no-file-parallelism
 
       - name: Check T3 Connect public configuration
         run: |
