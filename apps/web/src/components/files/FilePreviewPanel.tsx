@@ -1,3 +1,4 @@
+import { FileDownloadAction } from "~/fork/file-download/useFileDownload";
 import { DownloadIcon, CopyIcon, CheckIcon } from "lucide-react";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { Spinner } from "~/components/ui/spinner";
@@ -1264,6 +1265,13 @@ export default function FilePreviewPanel({
               revealFileManager={revealsInFileManager}
             />
           ) : null}
+          {absolutePath && file.isFile ? (
+            <FileDownloadAction
+              environmentId={environmentId}
+              threadId={threadRef.threadId}
+              path={absolutePath}
+            />
+          ) : null}
           {canToggleRendered && renderedMode ? (
             <FileSurfaceAction
               label={renderedToggleLabel(renderedMode, rendered)}
@@ -1515,6 +1523,7 @@ export default function FilePreviewPanel({
             )}
           >
             <FileBrowserPanel
+              threadId={threadRef.threadId}
               key={`${environmentId}:${hostFolderPath ?? cwd}`}
               environmentId={environmentId}
               cwd={hostFolderPath ?? cwd}

@@ -1,3 +1,4 @@
+import type { ThreadId } from "@t3tools/contracts";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import type {
   ContextMenuItem as TreeContextMenuItem,
@@ -22,7 +23,10 @@ import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useStableCallback } from "~/hooks/useStableCallback";
 import { useTheme } from "~/hooks/useTheme";
 import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh";
-import { useFileContextMenu, type FileContextMenuAction } from "~/fileContextMenu";
+import {
+  useDownloadFileContextMenu,
+  type FileContextMenuAction,
+} from "~/fork/file-download/useDownloadFileContextMenu";
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
 import { PIERRE_TREE_UNSAFE_CSS, pierreTreeStyle } from "~/pierre-tree-theme";
@@ -36,6 +40,7 @@ import { useDirectoryEntries } from "./useDirectoryEntries";
 import { useProjectPathSearch } from "~/state/queries";
 
 interface FileBrowserPanelProps {
+  threadId: ThreadId;
   environmentId: EnvironmentId;
   cwd: string;
   projectName: string;
@@ -133,6 +138,7 @@ function buildTreeEntries(
 }
 
 export default function FileBrowserPanel({
+  threadId,
   environmentId,
   cwd,
   projectName,
@@ -147,7 +153,7 @@ export default function FileBrowserPanel({
     hostFolder ? joinHostPath(cwd, relativePath) : relativePath;
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
-  const fileContextMenu = useFileContextMenu(environmentId);
+  const fileContextMenu = useDownloadFileContextMenu(environmentId, threadId);
   const {
     entries: directoryEntries,
     load,
@@ -196,7 +202,12 @@ export default function FileBrowserPanel({
       const position = pointerIsFresh
         ? { x: pointer.x, y: pointer.y }
         : { x: anchorRect.left, y: anchorRect.bottom };
-      const fileTarget = { environmentId, filePath: relativePath, workspaceRoot: cwd };
+      const fileTarget = {
+        environmentId,
+        filePath: relativePath,
+        workspaceRoot: cwd,
+        isDirectory: item.kind === "directory",
+      };
       const fileMenuItems = fileContextMenu.buildItems(fileTarget);
       void settlePromise(async () => {
         const clicked = await api.contextMenu.show(
