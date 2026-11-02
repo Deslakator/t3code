@@ -5,6 +5,7 @@ import { DownloadIcon } from "lucide-react";
 import { resolveAssetUrl } from "~/assets/assetUrls";
 import { assetEnvironment } from "~/state/assets";
 import { useFilesystemReadAccess } from "~/state/filesystem";
+import { useRemoteOpenState } from "~/remoteOpen";
 import { usePreparedConnection } from "~/state/session";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 import { toastManager } from "~/components/ui/toast";
@@ -13,6 +14,7 @@ import { FileSurfaceAction } from "~/components/files/fileSurfaceChrome";
 import { saveFileUrl } from "./saveFileUrl";
 
 export function useFileDownload(environmentId: EnvironmentId | null, threadId?: ThreadId) {
+  const remoteOpen = useRemoteOpenState(environmentId);
   const { canReadFiles } = useFilesystemReadAccess(environmentId);
   const connection = usePreparedConnection(environmentId);
   const createUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
@@ -22,7 +24,11 @@ export function useFileDownload(environmentId: EnvironmentId | null, threadId?: 
   const pending = useRef(false);
   const [saving, setSaving] = useState(false);
   const available =
-    threadId !== undefined && canReadFiles && connection._tag === "Some" && environmentId !== null;
+    remoteOpen.mode !== "local-exec" &&
+    threadId !== undefined &&
+    canReadFiles &&
+    connection._tag === "Some" &&
+    environmentId !== null;
   const download = async (path: string) => {
     if (!available || pending.current) return;
     pending.current = true;
