@@ -30,7 +30,7 @@ export function ComposerDictation(props: {
 }) {
   const revision = useRef(0);
   const previousPrompt = useRef(props.prompt);
-  // oxlint-disable-next-line t3code/react-effect-budget -- Invalidate in-flight transcription after any committed editor text change, including history and programmatic edits.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Invalidate in-flight transcription after any committed editor text change, including history and programmatic edits.
   useLayoutEffect(() => {
     if (previousPrompt.current !== props.prompt) {
       previousPrompt.current = props.prompt;

@@ -14,7 +14,7 @@ export function AudioSettingsPanel() {
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  // oxlint-disable-next-line t3code/react-effect-budget -- Read device-local encrypted audio preferences through Electron IPC when the panel mounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Read device-local encrypted audio preferences through Electron IPC when the panel mounts.
   useEffect(() => {
     let disposed = false;
     void bridge

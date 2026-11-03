@@ -64,7 +64,7 @@ export function DesktopDictation(props: {
     op.controller.abort();
     changePhase("idle");
   });
-  // oxlint-disable-next-line t3code/react-effect-budget -- Read local dictation availability and release microphone/upload resources when the draft owner unmounts.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- Read local dictation availability and release microphone/upload resources when the draft owner unmounts.
   useEffect(() => {
     let disposed = false;
     const refresh = () => {
