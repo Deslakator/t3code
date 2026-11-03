@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Schedule from "effect/Schedule";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/http/HttpClient";
@@ -7,7 +8,7 @@ import * as HttpBody from "effect/http/HttpBody";
 
 export class TranscriptionError extends Schema.TaggedError<TranscriptionError>()(
   "TranscriptionError",
-  { reason: Schema.String },
+  { reason: Schema.String, retryable: Schema.optional(Schema.Boolean) },
 ) {
   override get message() {
     return this.reason;
@@ -57,6 +58,8 @@ const make = Effect.gen(function* () {
               };
               return Effect.fail(
                 new TranscriptionError({
+                  retryable:
+                    response.status === 408 || response.status === 429 || response.status >= 500,
                   reason:
                     reasons[response.status] ?? "OpenRouter could not transcribe this recording.",
                 }),
@@ -76,14 +79,23 @@ const make = Effect.gen(function* () {
               ? error
               : new TranscriptionError({
                   reason: "Could not connect to OpenRouter or decode its response.",
+                  retryable: true,
                 }),
           ),
           Effect.timeoutOrElse({
             duration: "60 seconds",
             orElse: () =>
               Effect.fail(
-                new TranscriptionError({ reason: "OpenRouter transcription timed out." }),
+                new TranscriptionError({
+                  reason: "OpenRouter transcription timed out.",
+                  retryable: true,
+                }),
               ),
+          }),
+          Effect.retry({
+            times: 3,
+            schedule: Schedule.exponential("1 second"),
+            while: (error) => error.retryable === true,
           }),
           Effect.raceFirst(cancelled),
         );

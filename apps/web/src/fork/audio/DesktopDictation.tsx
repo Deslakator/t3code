@@ -26,6 +26,7 @@ type Operation = TranscriptionOperation & {
   recorder?: MediaRecorder;
   timer?: ReturnType<typeof setInterval>;
   chunks: Blob[];
+  recording?: Blob;
 };
 
 export function DesktopDictation(props: {
@@ -46,6 +47,7 @@ export function DesktopDictation(props: {
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [recovered, setRecovered] = useState("");
+  const [retryOperation, setRetryOperation] = useState<Operation | null>(null);
   const active = useRef<Operation | null>(null);
   const readDraft = useStableCallback(props.readDraft);
   const commitDraft = useStableCallback(props.commitDraft);
@@ -82,9 +84,6 @@ export function DesktopDictation(props: {
     };
     refresh();
     window.addEventListener(AUDIO_SETTINGS_CHANGED, refresh);
-    const onHidden = () => {
-      if (document.hidden) cancel();
-    };
     const onEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape" || event.isComposing || !active.current) return;
       event.preventDefault();
@@ -92,13 +91,11 @@ export function DesktopDictation(props: {
       cancel();
     };
     document.addEventListener("keydown", onEscape, true);
-    document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("pagehide", cancel);
     return () => {
       disposed = true;
       window.removeEventListener(AUDIO_SETTINGS_CHANGED, refresh);
       document.removeEventListener("keydown", onEscape, true);
-      document.removeEventListener("visibilitychange", onHidden);
       window.removeEventListener("pagehide", cancel);
       cancel();
     };
@@ -143,7 +140,9 @@ export function DesktopDictation(props: {
     changePhase("transcribing");
     await completeDictation(op, {
       transcribe: (signal) => {
-        const recording = new Blob(op.chunks, { type: op.recorder?.mimeType ?? "" });
+        const recording =
+          op.recording ?? new Blob(op.chunks, { type: op.recorder?.mimeType ?? "" });
+        op.recording = recording;
         op.chunks = [];
         return audioClient.transcribe(recording, signal);
       },
@@ -153,8 +152,10 @@ export function DesktopDictation(props: {
         setRecovered(text);
         setError("The draft changed. Copy the recognized text below.");
       },
-      fail: (cause) =>
-        setError(cause instanceof Error ? cause.message : "Could not transcribe this recording."),
+      fail: (cause) => {
+        setRetryOperation(op);
+        setError(cause instanceof Error ? cause.message : "Could not transcribe this recording.");
+      },
       complete: () => {
         if (active.current === op) {
           active.current = null;
@@ -177,6 +178,7 @@ export function DesktopDictation(props: {
       sendAfterTranscription: false,
     };
     active.current = op;
+    setRetryOperation(null);
     setError(null);
     setRecovered("");
     changePhase("preparing");
@@ -276,6 +278,26 @@ export function DesktopDictation(props: {
           <p role="alert" className="text-xs">
             {error}
           </p>
+          {retryOperation && phase === "idle" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const op = {
+                  ...retryOperation,
+                  controller: new AbortController(),
+                  sendAfterTranscription: false,
+                };
+                active.current = op;
+                setRetryOperation(null);
+                setError(null);
+                void transcribe(op);
+              }}
+            >
+              Retry transcription
+            </Button>
+          )}
           {recovered && (
             <Textarea
               aria-label="Recognized text from previous draft"
