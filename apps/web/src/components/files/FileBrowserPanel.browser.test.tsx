@@ -1,4 +1,4 @@
-import { EnvironmentId, type ProjectEntry } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, type ProjectEntry } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { page, userEvent } from "vite-plus/test/browser";
 
@@ -48,6 +48,7 @@ describe("FileBrowserPanel", () => {
   it("copies with the pointer and returns to the row after keyboard dismissal", async () => {
     await using _screen = await render(
       <FileBrowserPanel
+        threadId={ThreadId.make("thread-files")}
         environmentId={EnvironmentId.make("env-files")}
         cwd="/repo"
         projectName="repo"
@@ -86,6 +87,7 @@ describe("FileBrowserPanel", () => {
     const onOpenFile = vi.fn();
     await using _screen = await render(
       <FileBrowserPanel
+        threadId={ThreadId.make("thread-files")}
         environmentId={EnvironmentId.make("env-files")}
         cwd="/repo"
         projectName="repo"
