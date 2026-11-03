@@ -5,7 +5,7 @@ import * as TestClock from "effect/testing/TestClock";
 import * as Fiber from "effect/Fiber";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import { OpenRouterTranscriber, layer } from "./OpenRouterTranscriber";
+import { OpenRouterTranscriber, layer } from "./OpenRouterTranscriber.ts";
 
 it.effect.each([503, 429, 401, 502])("handles OpenRouter %s without losing the request", (status) =>
   Effect.gen(function* () {
@@ -28,7 +28,7 @@ it.effect.each([503, 429, 401, 502])("handles OpenRouter %s without losing the r
           apiKey: "test",
           model: "test",
           audio: new Uint8Array([1]),
-          signal: new AbortController().signal,
+          signal: yield* Effect.abortSignal,
         })
         .pipe(Effect.result, Effect.forkChild({ startImmediately: true }));
       if (status !== 401) yield* TestClock.adjust("10 seconds");
