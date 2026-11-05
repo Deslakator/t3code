@@ -1,3 +1,4 @@
+import { completeCodexLimitFailure } from "../../fork/codex-limit-reset/resolveReset.ts";
 import { pipe } from "effect/Function";
 import * as DocumentText from "../../provider/DocumentText.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
@@ -5751,7 +5752,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           },
         );
 
-        const emitRootTerminal = Effect.fnUntraced(function* (
+        const emitResolvedRootTerminal = Effect.fnUntraced(function* (
           context: ActiveCodexTurnContext,
           event: CodexRootTerminalEvent,
         ) {
@@ -5801,6 +5802,26 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
               new Map(items).set(context.providerThread.id, item),
             );
           }
+        });
+
+        const emitRootTerminal = Effect.fnUntraced(function* (
+          context: ActiveCodexTurnContext,
+          event: CodexRootTerminalEvent,
+        ) {
+          if (event.status !== "failed" || event.failure.class !== "usage_limit") {
+            return yield* emitResolvedRootTerminal(context, event);
+          }
+          const continued = continuedRuns.get(context.providerTurnId) ?? [context];
+          yield* Ref.update(terminalizedNonCompletedNativeTurns, (nativeTurns) =>
+            new Set([...nativeTurns, ...continued.map((turn) => turn.nativeTurnId)]),
+          );
+          const failure = {
+            ...event.failure,
+            resetAt: event.failure.resetAt ?? codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)),
+          };
+          yield* completeCodexLimitFailure(failure, client, (failure) =>
+            emitResolvedRootTerminal(context, { ...event, failure }),
+          );
         });
 
         const emitOrDeferRootTerminal = Effect.fn("CodexAdapterV2.emitOrDeferRootTerminal")(
