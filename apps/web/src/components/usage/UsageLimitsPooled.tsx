@@ -29,6 +29,7 @@ import {
 } from "react";
 
 import { ensureLocalApi } from "../../localApi";
+import { UsageLimitSource } from "../../fork/usage-limit-source/UsageLimitSource";
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
@@ -430,6 +431,7 @@ function SegmentTriggers({
           ) : null}
         </div>
       </PopoverTrigger>
+      <UsageLimitSource account={account} column={index} />
       <LegendRow payload={payload} color={color} now={now} index={index} />
     </>
   );
