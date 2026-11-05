@@ -1,5 +1,6 @@
 import type { OrchestrationV2ProviderFailure } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import type * as Scope from "effect/Scope";
 import type * as CodexClient from "effect-codex-app-server/client";
 import {
   codexUsageLimitResetAt,
@@ -20,13 +21,14 @@ export const resolveCodexLimitReset = Effect.fn("resolveCodexLimitReset")(functi
         : null,
     ),
     Effect.timeout("5 seconds"),
-    Effect.catch(() => Effect.succeed(null)),
+    Effect.orElseSucceed(() => null),
   );
 });
 
 export const completeCodexLimitFailure = Effect.fn("completeCodexLimitFailure")(function* (
   failure: OrchestrationV2ProviderFailure,
   client: Pick<CodexClient.CodexAppServerClient["Service"], "request">,
+  scope: Scope.Scope,
   publish: (failure: OrchestrationV2ProviderFailure) => Effect.Effect<void>,
 ) {
   if (failure.resetAt != null) return yield* publish(failure);
@@ -34,5 +36,5 @@ export const completeCodexLimitFailure = Effect.fn("completeCodexLimitFailure")(
   yield* Effect.gen(function* () {
     const resetAt = yield* resolveCodexLimitReset(undefined, client);
     yield* publish({ ...failure, resetAt });
-  }).pipe(Effect.forkScoped);
+  }).pipe(Effect.forkIn(scope));
 });

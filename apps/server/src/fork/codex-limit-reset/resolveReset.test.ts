@@ -1,4 +1,5 @@
 import { it } from "@effect/vitest";
+import * as Scope from "effect/Scope";
 import * as Deferred from "effect/Deferred";
 import { makeProviderFailure } from "@t3tools/provider-core/server/failure";
 import * as Effect from "effect/Effect";
@@ -37,33 +38,31 @@ it.effect("preserves a known reset without a request", () =>
 
 it.effect("keeps the usage failure when the usage read fails", () =>
   Effect.gen(function* () {
-    const request = vi.fn().mockReturnValue(Effect.fail(new Error("offline")));
+    const request = vi.fn().mockReturnValue(Effect.fail({ _tag: "Offline" as const }));
     expect(yield* resolveCodexLimitReset(undefined, { request })).toBeNull();
   }),
 );
 
 it.effect("returns from the notification before waiting for its response", () =>
-  Effect.gen(function* () {
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        const response = yield* Deferred.make<{
-          rateLimits: { primary: { usedPercent: number; resetsAt: number } };
-        }>();
-        const published = yield* Deferred.make<string | null | undefined>();
-        const request = vi.fn().mockReturnValue(Deferred.await(response));
-        const failure = makeProviderFailure({
-          class: "usage_limit",
-          message: "Usage limit reached",
-        });
-        yield* completeCodexLimitFailure(failure, { request }, (updated) =>
-          Deferred.succeed(published, updated.resetAt).pipe(Effect.asVoid),
-        );
-        expect(yield* Deferred.isDone(published)).toBe(false);
-        yield* Deferred.succeed(response, {
-          rateLimits: { primary: { usedPercent: 100, resetsAt: 2_000_000_000 } },
-        });
-        expect(yield* Deferred.await(published)).toBe("2033-05-18T03:33:20.000Z");
-      }),
-    );
-  }),
+  Effect.scoped(
+    Effect.gen(function* () {
+      const response = yield* Deferred.make<{
+        rateLimits: { primary: { usedPercent: number; resetsAt: number } };
+      }>();
+      const published = yield* Deferred.make<string | null | undefined>();
+      const request = vi.fn().mockReturnValue(Deferred.await(response));
+      const failure = makeProviderFailure({
+        class: "usage_limit",
+        message: "Usage limit reached",
+      });
+      yield* completeCodexLimitFailure(failure, { request }, yield* Scope.Scope, (updated) =>
+        Deferred.succeed(published, updated.resetAt).pipe(Effect.asVoid),
+      );
+      expect(yield* Deferred.isDone(published)).toBe(false);
+      yield* Deferred.succeed(response, {
+        rateLimits: { primary: { usedPercent: 100, resetsAt: 2_000_000_000 } },
+      });
+      expect(yield* Deferred.await(published)).toBe("2033-05-18T03:33:20.000Z");
+    }),
+  ),
 );

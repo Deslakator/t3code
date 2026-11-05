@@ -5819,7 +5819,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             ...event.failure,
             resetAt: event.failure.resetAt ?? codexUsageLimitResetAt(yield* Ref.get(rateLimitSnapshot)),
           };
-          yield* completeCodexLimitFailure(failure, client, (failure) =>
+          yield* completeCodexLimitFailure(failure, client, scope, (failure) =>
             emitResolvedRootTerminal(context, { ...event, failure }),
           );
         });
