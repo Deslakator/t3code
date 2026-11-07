@@ -190,11 +190,13 @@ Architecture and its constraints: `docs/internals/overview.md`. Glossary: `docs/
 
 ## Fork-specific changes
 
-- Implement this fork's features separately from upstream code by default, so merging upstream remains straightforward.
+- Minimizing overlap with upstream is a critical implementation and review requirement. Choose the smallest upstream integration surface that preserves correct behavior, so future upstream merges remain straightforward.
+- Implement fork features through modules and adapters in fork directories. Prefer composing existing services, hooks, and components over adding fork decisions, state, or subscriptions to shared upstream implementations, especially when unrelated callers would inherit them.
 - Put feature logic, workers, helpers, and their tests under the owning package's `src/fork/<feature>/`. Put fork-specific contract schemas under `packages/contracts/src/fork/`.
 - Keep upstream files to the smallest integration points: imports, calls to fork functions, layer registration, and schema field spreads. Aim for one to three integration lines per location, plus imports. Move decisions and behavior into the fork module instead of expanding those hooks.
 - Keep tests for fork behavior alongside the fork implementation. Do not add fork-specific test blocks to upstream test files; run focused tests for our functions. Broaden verification only when a change actually affects upstream behavior or the maintainer requests it.
 - Reuse existing services and execution paths through these hooks. Preserve their transactions, permissions, cancellation, and duplicate-delivery checks; do not bypass them to reduce the diff or refactor upstream systems merely to accommodate a fork feature.
+- Before finishing or reviewing a change, inspect the diff against the fork's base branch: justify each upstream touchpoint, move avoidable behavior into fork modules, and remove unrelated upstream edits or formatting churn. A smaller line count alone is not isolation; preserve upstream behavior for callers outside the fork feature.
 
 ## Taste
 
