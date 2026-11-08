@@ -1,3 +1,4 @@
+import { reviewWorktreeRequestFields } from "~/fork/diff-worktree/reviewFields";
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type {
@@ -191,6 +192,7 @@ function reviewFileQueries({
                 cacheKey: scope,
                 ...(previewInput ? { preview: previewInput } : {}),
                 request: {
+                  ...reviewWorktreeRequestFields(previewInput),
                   cwd,
                   ...(baseRef ? { baseRef } : {}),
                   ...(source.kind === "commit" ? { commitSha: source.id } : {}),

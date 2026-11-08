@@ -21,6 +21,7 @@ import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as KnownWorkspaces from "../workspace/KnownWorkspaces.ts";
+import { makeProjectReviewWorktree } from "../fork/diff-worktree/reviewWorktree.ts";
 
 const WORKSPACE_BOUND_SUBJECTS = {
   "ReviewService.getBranchCommits": "commit list",
@@ -51,6 +52,7 @@ export const make = Effect.gen(function* () {
   const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
   const git = yield* GitVcsDriver.GitVcsDriver;
   const knownWorkspaces = yield* KnownWorkspaces.KnownWorkspaces;
+  const isProjectReviewWorktree = yield* makeProjectReviewWorktree;
 
   const canonicalizePath = (value: string) => {
     const resolvedPath = path.resolve(value);
@@ -74,6 +76,7 @@ export const make = Effect.gen(function* () {
   const assertWorkspaceBoundCwd = Effect.fn("ReviewService.assertWorkspaceBoundCwd")(function* (
     operation: keyof typeof WORKSPACE_BOUND_SUBJECTS,
     cwd: string,
+    worktreeProjectRoot?: string,
   ) {
     const [candidate, workspaceRoot] = yield* Effect.all([
       canonicalizePath(cwd),
@@ -81,7 +84,9 @@ export const make = Effect.gen(function* () {
     ]);
     if (
       KnownWorkspaces.isWithinRoot(path, candidate, workspaceRoot) ||
-      (yield* knownWorkspaces.contains(candidate))
+      (yield* knownWorkspaces.contains(candidate)) ||
+      (worktreeProjectRoot !== undefined &&
+        (yield* isProjectReviewWorktree(candidate, worktreeProjectRoot)))
     ) {
       return;
     }
@@ -96,7 +101,11 @@ export const make = Effect.gen(function* () {
   const getBranchCommits: ReviewService["Service"]["getBranchCommits"] = Effect.fn(
     "ReviewService.getBranchCommits",
   )(function* (input) {
-    yield* assertWorkspaceBoundCwd("ReviewService.getBranchCommits", input.cwd);
+    yield* assertWorkspaceBoundCwd(
+      "ReviewService.getBranchCommits",
+      input.cwd,
+      input.worktreeProjectRoot,
+    );
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
     if (!handle) return { commits: [], truncated: false };
@@ -113,7 +122,11 @@ export const make = Effect.gen(function* () {
   const getDiffPreview: ReviewService["Service"]["getDiffPreview"] = Effect.fn(
     "ReviewService.getDiffPreview",
   )(function* (input) {
-    yield* assertWorkspaceBoundCwd("ReviewService.getDiffPreview", input.cwd);
+    yield* assertWorkspaceBoundCwd(
+      "ReviewService.getDiffPreview",
+      input.cwd,
+      input.worktreeProjectRoot,
+    );
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
     if (!handle) {
@@ -130,7 +143,11 @@ export const make = Effect.gen(function* () {
   const getDiffFileContents: ReviewService["Service"]["getDiffFileContents"] = Effect.fn(
     "ReviewService.getDiffFileContents",
   )(function* (input) {
-    yield* assertWorkspaceBoundCwd("ReviewService.getDiffFileContents", input.cwd);
+    yield* assertWorkspaceBoundCwd(
+      "ReviewService.getDiffFileContents",
+      input.cwd,
+      input.worktreeProjectRoot,
+    );
 
     const handle = yield* vcsRegistry.detect({ cwd: input.cwd, requestedKind: "auto" });
     if (handle?.kind !== "git") {
