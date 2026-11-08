@@ -54,6 +54,9 @@ jobs:
           vp run --filter @t3tools/web typecheck
           vp run --filter @t3tools/desktop typecheck
 
+      - name: Install Chromium for browser tests
+        run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
+
       - name: Test fork features
         run: vp test run apps/server/src/fork apps/web/src/fork apps/desktop/src/fork packages/contracts/src/fork --maxWorkers=1 --no-file-parallelism
 
