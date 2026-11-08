@@ -20,6 +20,12 @@ commit links follow your **Open links in** setting; on web, when that opens a ne
 shows an **Open link** button. Command/Ctrl+Click always opens the link in your browser. Commit links follow the **Open pull requests in T3 Code**
 setting in **Settings → Diffs**.
 
+When an agent edits a separate worktree, open **Thread folder** in the Diff pane and select
+that checkout. The selection is remembered for this chat on this device and changes the
+branch, uncommitted, and commit views. Choose **Thread folder** to return. Turn history
+keeps its original snapshots, and choosing a diff folder does not move the agent session.
+Files opened from a selected worktree use your preferred editor. Worktrees without a branch are not listed.
+
 ## Connect an account
 
 Install Git and configure authentication on the machine running your T3 Code server. For a remote

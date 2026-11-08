@@ -1,3 +1,4 @@
+import { useDiffWorktree } from "../fork/diff-worktree/useDiffWorktree";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import type { FileDiffContentsLoader, FileDiffMetadata } from "@pierre/diffs";
@@ -99,7 +100,6 @@ import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
-import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 
 import { useReviewFilePatches } from "./diffs/useReviewFilePatches";
 import { DiffFileLoadingBoundary } from "./diffs/DiffFileLoadingBoundary";
@@ -245,10 +245,19 @@ export default function DiffPanel({
         }
       : null,
   );
-  const activeCwd = activeThread?.worktreePath ?? activeProject?.workspaceRoot;
-  const activeRepositoryRoot = activeThread?.worktreePath
-    ? undefined
-    : activeProject?.repositoryIdentity?.rootPath;
+  const diffSelection = useDiffPanelStore((state) =>
+    selectThreadDiffPanelSelection(state.byThreadKey, routeThreadRef),
+  );
+  const diffWorktree = useDiffWorktree({
+    threadRef: routeThreadRef,
+    projectCwd: activeProject?.workspaceRoot,
+    defaultCwd: activeThread?.worktreePath ?? activeProject?.workspaceRoot,
+    enabled: canReadFiles && ["branch", "unstaged", "commit"].includes(diffSelection.kind),
+  });
+  const activeCwd = diffWorktree.cwd;
+  const activeRepositoryRoot = diffWorktree.repositoryRoot(
+    activeThread?.worktreePath ? undefined : activeProject?.repositoryIdentity?.rootPath,
+  );
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
   );
@@ -265,9 +274,6 @@ export default function DiffPanel({
           input: { cwd: activeCwd },
         })
       : null,
-  );
-  const diffSelection = useDiffPanelStore((state) =>
-    selectThreadDiffPanelSelection(state.byThreadKey, routeThreadRef),
   );
   const rememberedBaseRef = useDiffPanelStore((state) =>
     selectThreadBranchBaseRef(state, routeThreadRef),
@@ -333,7 +339,7 @@ export default function DiffPanel({
         ? `commit:${selectedCommitSha}`
         : selectedGitScope;
   const collapseScopeKey = routeThreadRef
-    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}`
+    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}${diffWorktree.scopeSuffix}`
     : null;
   const codeViewMountKey = `${collapseScopeKey ?? reviewSectionId}:${codeViewRevision}`;
   const selectedCheckpointRange =
@@ -358,6 +364,7 @@ export default function DiffPanel({
     canReadFiles && isGitSelection && activeThread && activeCwd
       ? {
           cwd: activeCwd,
+          ...diffWorktree.reviewFields,
           ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
           ...(selectedCommitSha !== null ? { commitSha: selectedCommitSha } : {}),
           ignoreWhitespace: diffIgnoreWhitespace,
@@ -384,6 +391,7 @@ export default function DiffPanel({
           environmentId: activeThread.environmentId,
           input: {
             cwd: activeCwd,
+            ...diffWorktree.reviewFields,
             ...(rememberedBaseRef ? { baseRef: rememberedBaseRef } : {}),
           },
         })
@@ -503,7 +511,7 @@ export default function DiffPanel({
       : null;
   const currentLoadDiffFiles =
     isGitSelection && activeThread && preview && selectedGitSource && canReadFiles
-      ? createGitDiffFileContentsLoader(getDiffFileContents, {
+      ? diffWorktree.createFileContentsLoader(getDiffFileContents, {
           environmentId: activeThread.environmentId,
           cwd: preview.cwd,
           sourceKind: selectedGitSource.kind,
@@ -694,7 +702,7 @@ export default function DiffPanel({
 
   const openDiffFile = (filePath: string) => {
     openDiffFilePrimaryAction({
-      threadRef: routeThreadRef,
+      threadRef: diffWorktree.fileThreadRef,
       filePath,
       activeCwd,
       repositoryRoot: activeRepositoryRoot,
@@ -784,6 +792,7 @@ export default function DiffPanel({
   const headerRow = (
     <>
       <div className="@container/diff-refs flex min-w-0 flex-1 items-center gap-3 [-webkit-app-region:no-drag]">
+        {diffWorktree.picker}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button size="xs" variant="secondary" />}
@@ -1391,8 +1400,10 @@ export default function DiffPanel({
                     files={codeViewFiles}
                     pendingFiles={pendingFiles}
                     renderCodeViewFooter={renderLoadingBoundary}
-                    sectionId={reviewSectionId}
-                    sectionTitle={reviewSectionTitle}
+                    sectionId={diffWorktree.reviewSection(reviewSectionId, reviewSectionTitle).id}
+                    sectionTitle={
+                      diffWorktree.reviewSection(reviewSectionId, reviewSectionTitle).title
+                    }
                     composerDraftTarget={composerDraftTarget}
                     renderHeaderFilenameSuffix={(fileDiff) => {
                       const path = resolveFileDiffPath(fileDiff);
