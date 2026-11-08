@@ -1,3 +1,4 @@
+import { createDiffWorktreeReviewContext } from "./reviewContext";
 import { worktreeReviewSection } from "./reviewSection";
 import { useId, useState } from "react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
@@ -136,6 +137,6 @@ export function useDiffWorktree({
       worktreeReviewSection(id, title, enabled ? selected : undefined),
     fileThreadRef: enabled && selected ? null : threadRef,
     scopeSuffix: enabled && selected ? `:${selected}` : "",
-    reviewFields: enabled && selected && projectCwd ? { worktreeProjectRoot: projectCwd } : {},
+    ...createDiffWorktreeReviewContext(enabled ? selected : undefined, projectCwd),
   };
 }

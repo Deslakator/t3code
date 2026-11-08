@@ -100,7 +100,6 @@ import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
-import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 
 import { useReviewFilePatches } from "./diffs/useReviewFilePatches";
 import { DiffFileLoadingBoundary } from "./diffs/DiffFileLoadingBoundary";
@@ -256,10 +255,9 @@ export default function DiffPanel({
     enabled: canReadFiles && ["branch", "unstaged", "commit"].includes(diffSelection.kind),
   });
   const activeCwd = diffWorktree.cwd;
-  const activeRepositoryRoot =
-    activeCwd !== activeProject?.workspaceRoot
-      ? undefined
-      : activeProject?.repositoryIdentity?.rootPath;
+  const activeRepositoryRoot = diffWorktree.repositoryRoot(
+    activeThread?.worktreePath ? undefined : activeProject?.repositoryIdentity?.rootPath,
+  );
   const serverConfig = useAtomValue(
     serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
   );
@@ -513,21 +511,14 @@ export default function DiffPanel({
       : null;
   const currentLoadDiffFiles =
     isGitSelection && activeThread && preview && selectedGitSource && canReadFiles
-      ? createGitDiffFileContentsLoader(
-          (request) =>
-            getDiffFileContents({
-              ...request,
-              input: { ...request.input, ...diffWorktree.reviewFields },
-            }),
-          {
-            environmentId: activeThread.environmentId,
-            cwd: preview.cwd,
-            sourceKind: selectedGitSource.kind,
-            baseRef: selectedGitSource.baseRef,
-            headRef: selectedGitSource.headRef,
-            cacheKey: `${preview.cwd}:${selectedGitSource.diffHash}`,
-          },
-        )
+      ? diffWorktree.createFileContentsLoader(getDiffFileContents, {
+          environmentId: activeThread.environmentId,
+          cwd: preview.cwd,
+          sourceKind: selectedGitSource.kind,
+          baseRef: selectedGitSource.baseRef,
+          headRef: selectedGitSource.headRef,
+          cacheKey: selectedGitSource.diffHash,
+        })
       : undefined;
   const loadDiffFiles: FileDiffContentsLoader = useStableCallback(async (fileDiff) => {
     if (!currentLoadDiffFiles) {
