@@ -4,6 +4,7 @@ import * as DesktopIpc from "../../ipc/DesktopIpc.ts";
 import * as AudioSettings from "./AudioSettings.ts";
 import * as DictationService from "./DictationService.ts";
 import * as OpenRouterTranscriber from "./OpenRouterTranscriber.ts";
+import * as AssemblyAiTranscriber from "./AssemblyAiTranscriber.ts";
 import * as Methods from "./ipc.ts";
 
 const install = Effect.fn("fork.audio.install")(function* () {
@@ -18,6 +19,7 @@ export const layer = Layer.effectDiscard(install()).pipe(
     DictationService.layer.pipe(
       Layer.provideMerge(AudioSettings.layer),
       Layer.provide(OpenRouterTranscriber.layer),
+      Layer.provide(AssemblyAiTranscriber.layer),
     ),
   ),
 );

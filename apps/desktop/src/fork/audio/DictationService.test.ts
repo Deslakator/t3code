@@ -5,7 +5,12 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
-import { DICTATION_MAX_BYTES, type DictationResult } from "@t3tools/contracts/fork/audio";
+import {
+  DICTATION_MAX_BYTES,
+  type DictationResult,
+  type DictationProvider,
+} from "@t3tools/contracts/fork/audio";
+import * as AssemblyAiTranscriber from "./AssemblyAiTranscriber.ts";
 import * as AudioSettings from "./AudioSettings.ts";
 import * as DictationService from "./DictationService.ts";
 import * as OpenRouterTranscriber from "./OpenRouterTranscriber.ts";
@@ -35,7 +40,10 @@ const fixture = <A, E, R>(
   body: Effect.Effect<A, E, R | DictationService.DictationService>,
   transcribe: OpenRouterTranscriber.OpenRouterTranscriber["Service"]["transcribe"] = () =>
     Effect.succeed("Используй TypeScript и OpenRouter."),
-  loadKey: AudioSettings.AudioSettings["Service"]["loadKey"] = Effect.succeed("test-key"),
+  loadKey: Effect.Effect<string, AudioSettings.AudioSettingsError> = Effect.succeed("test-key"),
+  provider: DictationProvider = "openrouter",
+  assemblyTranscribe: AssemblyAiTranscriber.AssemblyAiTranscriber["Service"]["transcribe"] = () =>
+    Effect.die("AssemblyAI was not selected"),
 ) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -45,13 +53,24 @@ const fixture = <A, E, R>(
         DictationService.layer.pipe(
           Layer.provide(Layer.succeed(OpenRouterTranscriber.OpenRouterTranscriber, { transcribe })),
           Layer.provide(
+            Layer.succeed(AssemblyAiTranscriber.AssemblyAiTranscriber, {
+              transcribe: assemblyTranscribe,
+            }),
+          ),
+          Layer.provide(
             Layer.succeed(AudioSettings.AudioSettings, {
               get: Effect.succeed({
                 enabled,
+                provider,
+                hasOpenRouterApiKey: enabled,
+                hasAssemblyAiApiKey: enabled,
                 hasApiKey: enabled,
                 model: "openai/whisper-large-v3-turbo",
               }),
-              loadKey,
+              loadProviderKey: (selected) => {
+                expect(selected).toBe(provider);
+                return loadKey;
+              },
               save: () => Effect.die("Settings writes are not expected in upload tests"),
             }),
           ),
@@ -61,6 +80,34 @@ const fixture = <A, E, R>(
   });
 
 it.layer(NodeServices.layer)("DictationService", (it) => {
+  it.effect("routes AssemblyAI dictation through the selected provider and its key", () =>
+    fixture(
+      true,
+      Effect.gen(function* () {
+        const service = yield* DictationService.DictationService;
+        const id = uploadId(yield* service.execute("a", { type: "start" }));
+        yield* service.execute("a", {
+          type: "append",
+          uploadId: id,
+          offset: 0,
+          data: wav().toString("base64"),
+        });
+        expect(yield* service.execute("a", { type: "finish", uploadId: id })).toEqual({
+          kind: "transcript",
+          text: "Привет от AssemblyAI.",
+        });
+      }),
+      () => Effect.die("OpenRouter must not receive AssemblyAI audio"),
+      Effect.succeed("assembly-key"),
+      "assemblyai",
+      (input) =>
+        Effect.sync(() => {
+          expect(input.apiKey).toBe("assembly-key");
+          expect(Buffer.from(input.audio)).toEqual(wav());
+          return "Привет от AssemblyAI.";
+        }),
+    ),
+  );
   it.effect("is disabled without desktop settings", () =>
     fixture(
       false,

@@ -31,16 +31,22 @@ export const DictationResult = Schema.Union([
 ]);
 export type DictationResult = typeof DictationResult.Type;
 
+export const DictationProvider = Schema.Literals(["openrouter", "assemblyai"]);
+export type DictationProvider = typeof DictationProvider.Type;
 export const DesktopAudioSettings = Schema.Struct({
   enabled: Schema.Boolean,
   hasApiKey: Schema.Boolean,
   model: Schema.String,
+  provider: DictationProvider,
+  hasOpenRouterApiKey: Schema.Boolean,
+  hasAssemblyAiApiKey: Schema.Boolean,
 });
 export type DesktopAudioSettings = typeof DesktopAudioSettings.Type;
 export const DesktopAudioSettingsUpdate = Schema.Struct({
   enabled: Schema.Boolean,
   model: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
   apiKey: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(1024))),
+  provider: Schema.optionalKey(DictationProvider),
 });
 export type DesktopAudioSettingsUpdate = typeof DesktopAudioSettingsUpdate.Type;
 
