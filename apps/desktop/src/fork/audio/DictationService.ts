@@ -13,6 +13,7 @@ import * as Clock from "effect/Clock";
 import * as Schedule from "effect/Schedule";
 import * as AudioSettings from "./AudioSettings.ts";
 import * as OpenRouterTranscriber from "./OpenRouterTranscriber.ts";
+import * as AssemblyAiTranscriber from "./AssemblyAiTranscriber.ts";
 
 type Upload = {
   owner: string;
@@ -60,6 +61,7 @@ const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const preferences = yield* AudioSettings.AudioSettings;
   const transcriber = yield* OpenRouterTranscriber.OpenRouterTranscriber;
+  const assemblyAi = yield* AssemblyAiTranscriber.AssemblyAiTranscriber;
   const uploads = new Map<string, Upload>();
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
@@ -169,14 +171,20 @@ const make = Effect.gen(function* () {
       upload.finishing = true;
       upload.chunks = [];
       upload.lastData = "";
-      return yield* preferences.loadKey.pipe(
+      return yield* preferences.loadProviderKey(settings.provider).pipe(
         Effect.flatMap((apiKey) =>
-          transcriber.transcribe({
-            audio,
-            apiKey,
-            model: settings.model,
-            signal: upload.controller.signal,
-          }),
+          settings.provider === "assemblyai"
+            ? assemblyAi.transcribe({
+                audio,
+                apiKey,
+                signal: upload.controller.signal,
+              })
+            : transcriber.transcribe({
+                audio,
+                apiKey,
+                model: settings.model,
+                signal: upload.controller.signal,
+              }),
         ),
         Effect.map((text): DictationResult => ({ kind: "transcript", text })),
         Effect.catchTags({

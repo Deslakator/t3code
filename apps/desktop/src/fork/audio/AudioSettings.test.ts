@@ -53,6 +53,70 @@ const fixture = <A, E, R>(
 
 it.layer(NodeServices.layer)("AudioSettings", (it) => {
   it.effect(
+    "reads existing settings and keeps provider keys separate across switching and removal",
+    () =>
+      fixture((file) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs.makeDirectory(file.slice(0, file.lastIndexOf("/")), { recursive: true });
+          yield* fs.writeFileString(
+            file,
+            JSON.stringify({
+              enabled: true,
+              model: "custom-openrouter-model",
+              encryptedApiKey: Buffer.from("legacy-key").reverse().toString("base64"),
+            }),
+          );
+          const service = yield* AudioSettings.AudioSettings;
+          expect(yield* service.get).toMatchObject({
+            provider: "openrouter",
+            hasApiKey: true,
+            hasAssemblyAiApiKey: false,
+          });
+          expect(yield* service.loadProviderKey("openrouter")).toBe("legacy-key");
+          const assembly = yield* service.save({
+            enabled: true,
+            model: "custom-openrouter-model",
+            provider: "assemblyai",
+            apiKey: "assembly-private-key",
+          });
+          expect(assembly).toMatchObject({
+            provider: "assemblyai",
+            hasApiKey: true,
+            hasOpenRouterApiKey: true,
+            hasAssemblyAiApiKey: true,
+          });
+          expect(yield* fs.readFileString(file)).not.toContain("assembly-private-key");
+          expect(yield* service.loadProviderKey("assemblyai")).toBe("assembly-private-key");
+          yield* service.save({
+            enabled: true,
+            model: "custom-openrouter-model",
+            provider: "openrouter",
+          });
+          expect(yield* service.loadProviderKey("openrouter")).toBe("legacy-key");
+          yield* service.save({
+            enabled: true,
+            model: "custom-openrouter-model",
+            provider: "assemblyai",
+          });
+          expect(yield* service.loadProviderKey("assemblyai")).toBe("assembly-private-key");
+          yield* service.save({
+            enabled: false,
+            model: "custom-openrouter-model",
+            provider: "assemblyai",
+            apiKey: "",
+          });
+          expect(yield* service.get).toMatchObject({
+            hasApiKey: false,
+            hasOpenRouterApiKey: true,
+            hasAssemblyAiApiKey: false,
+          });
+          expect(yield* service.loadProviderKey("openrouter")).toBe("legacy-key");
+          expect(yield* service.loadProviderKey("assemblyai")).toBe("");
+        }),
+      ),
+  );
+  it.effect(
     "encrypts keys, returns only presence, preserves on model edits and supports replacement/removal",
     () =>
       fixture((file) =>
@@ -65,23 +129,23 @@ it.layer(NodeServices.layer)("AudioSettings", (it) => {
             model: "openai/whisper-large-v3-turbo",
             apiKey: "test-private-key",
           });
-          expect(saved).toEqual({
+          expect(saved).toMatchObject({
             enabled: true,
             hasApiKey: true,
             model: "openai/whisper-large-v3-turbo",
           });
           expect(yield* fs.readFileString(file)).not.toContain("test-private-key");
-          expect(yield* service.loadKey).toBe("test-private-key");
+          expect(yield* service.loadProviderKey("openrouter")).toBe("test-private-key");
           yield* service.save({ enabled: true, model: "openai/whisper-large-v3" });
-          expect(yield* service.loadKey).toBe("test-private-key");
+          expect(yield* service.loadProviderKey("openrouter")).toBe("test-private-key");
           yield* service.save({
             enabled: true,
             model: "openai/whisper-large-v3",
             apiKey: "replacement",
           });
-          expect(yield* service.loadKey).toBe("replacement");
+          expect(yield* service.loadProviderKey("openrouter")).toBe("replacement");
           yield* service.save({ enabled: false, model: "openai/whisper-large-v3", apiKey: "" });
-          expect(yield* service.loadKey).toBe("");
+          expect(yield* service.loadProviderKey("openrouter")).toBe("");
           expect(yield* service.get).toMatchObject({ hasApiKey: false, enabled: false });
         }),
       ),

@@ -1,6 +1,7 @@
 import type {
   DesktopAudioSettings,
   DesktopAudioSettingsUpdate,
+  DictationProvider,
 } from "@t3tools/contracts/fork/audio";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -16,6 +17,8 @@ const Stored = Schema.Struct({
   enabled: Schema.Boolean,
   model: Schema.String,
   encryptedApiKey: Schema.String,
+  provider: Schema.optionalKey(Schema.Literals(["openrouter", "assemblyai"])),
+  encryptedAssemblyAiApiKey: Schema.optionalKey(Schema.String),
 });
 const encodeStored = Schema.encodeEffect(Schema.fromJsonString(Stored));
 const defaults = { enabled: false, model: "openai/whisper-large-v3-turbo", encryptedApiKey: "" };
@@ -33,7 +36,9 @@ export class AudioSettings extends Context.Service<
   AudioSettings,
   {
     readonly get: Effect.Effect<DesktopAudioSettings, AudioSettingsError>;
-    readonly loadKey: Effect.Effect<string, AudioSettingsError>;
+    readonly loadProviderKey: (
+      provider: DictationProvider,
+    ) => Effect.Effect<string, AudioSettingsError>;
     readonly save: (
       input: DesktopAudioSettingsUpdate,
     ) => Effect.Effect<DesktopAudioSettings, AudioSettingsError>;
@@ -60,22 +65,37 @@ const make = Effect.gen(function* () {
   const publicSettings = (stored: typeof Stored.Type): DesktopAudioSettings => ({
     enabled: stored.enabled,
     model: stored.model,
-    hasApiKey: stored.encryptedApiKey !== "",
+    provider: stored.provider ?? "openrouter",
+    hasApiKey:
+      (stored.provider === "assemblyai"
+        ? (stored.encryptedAssemblyAiApiKey ?? "")
+        : stored.encryptedApiKey) !== "",
+    hasOpenRouterApiKey: stored.encryptedApiKey !== "",
+    hasAssemblyAiApiKey: (stored.encryptedAssemblyAiApiKey ?? "") !== "",
+  });
+  const loadProviderKey = Effect.fn("AudioSettings.loadProviderKey")(function* (
+    provider: DictationProvider,
+  ) {
+    const stored = yield* read;
+    const encrypted =
+      provider === "assemblyai" ? stored.encryptedAssemblyAiApiKey : stored.encryptedApiKey;
+    if (!encrypted) return "";
+    return yield* secure
+      .decryptString(Buffer.from(encrypted, "base64"))
+      .pipe(Effect.mapError(() => new AudioSettingsError({ operation: "decrypt" })));
   });
   return AudioSettings.of({
     get: read.pipe(Effect.map(publicSettings)),
-    loadKey: Effect.gen(function* () {
-      const stored = yield* read;
-      if (!stored.encryptedApiKey) return "";
-      return yield* secure
-        .decryptString(Buffer.from(stored.encryptedApiKey, "base64"))
-        .pipe(Effect.mapError(() => new AudioSettingsError({ operation: "decrypt" })));
-    }),
+    loadProviderKey,
     save: Effect.fn("AudioSettings.save")(function* (input) {
       return yield* lock.withPermits(1)(
         Effect.gen(function* () {
           const stored = yield* read;
-          let encryptedApiKey = stored.encryptedApiKey;
+          const provider = input.provider ?? stored.provider ?? "openrouter";
+          let encryptedApiKey =
+            provider === "assemblyai"
+              ? (stored.encryptedAssemblyAiApiKey ?? "")
+              : stored.encryptedApiKey;
           if (input.apiKey !== undefined) {
             if (input.apiKey.trim() === "") encryptedApiKey = "";
             else {
@@ -89,7 +109,15 @@ const make = Effect.gen(function* () {
               encryptedApiKey = Buffer.from(encrypted).toString("base64");
             }
           }
-          const next = { enabled: input.enabled, model: input.model.trim(), encryptedApiKey };
+          const next = {
+            ...stored,
+            enabled: input.enabled,
+            model: input.model.trim(),
+            provider,
+            ...(provider === "assemblyai"
+              ? { encryptedAssemblyAiApiKey: encryptedApiKey }
+              : { encryptedApiKey }),
+          };
           if (!next.model) return yield* new AudioSettingsError({ operation: "save" });
           const temporary = `${file}.tmp`;
           const encoded = yield* encodeStored(next).pipe(
