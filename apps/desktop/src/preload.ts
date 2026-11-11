@@ -1,4 +1,3 @@
-import { installForkAudioBridge } from "./fork/audio/preload.ts";
 import type {
   DesktopBridge,
   DesktopPreviewAnnotationVoiceEvent,
@@ -502,5 +501,3 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     },
   },
 } satisfies DesktopBridge);
-
-installForkAudioBridge();

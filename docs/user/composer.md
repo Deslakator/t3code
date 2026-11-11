@@ -196,18 +196,6 @@ Stashes containing uploaded files must be restored in their original environment
 Those files are retained for 24 hours. After an upload expires, restore the prompt
 and use **Attach again** or remove the missing file before sending.
 
-## Voice input directly on Mac
-
-In **Settings → General → Audio**, enable voice dictation, choose OpenRouter or
-AssemblyAI, and save an API key for that service. Keys stay encrypted on this Mac
-and are saved separately, so you can switch services without re-entering them.
-Recordings are sent to the selected service and charged to your account.
-
-AssemblyAI uses Universal-2 with Russian selected explicitly. OpenRouter uses the
-model you enter in Audio settings. Use the composer's microphone to record up to
-five minutes, then stop to insert the text. Press Enter while recording to send
-after transcription, or Esc to cancel.
-
 ## Voice input on web and desktop
 
 Use the composer's microphone or `mod+shift+d` to dictate into your draft. Audio
