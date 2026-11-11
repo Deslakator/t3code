@@ -1,3 +1,4 @@
+import { KeepAwakeControl } from "../../fork/keep-awake/KeepAwakeControl";
 import {
   PanelBottomIcon,
   PanelRightIcon,
@@ -86,6 +87,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
       className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
+      {showThreadPanelControl ? <KeepAwakeControl /> : null}
       {showThreadPanelControl ? threadPanelControl : null}
       {showTerminalControl ? (
         <Tooltip>

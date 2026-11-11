@@ -73,3 +73,6 @@ export * from "./secretRequest.ts";
 export * from "./secretReference.ts";
 export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
+
+export * from "./fork/keep-awake/bridge.ts";
+export { keepsMacAwake } from "./fork/keep-awake/activity.ts";

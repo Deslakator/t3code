@@ -87,6 +87,14 @@ function unwrapEnsureSshEnvironmentResult(result: unknown) {
 }
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  getKeepAwakeState: () => ipcRenderer.invoke("fork:keep-awake:get"),
+  setKeepAwakeMode: (mode) => ipcRenderer.invoke("fork:keep-awake:set", mode),
+  onKeepAwakeState: (listener) => {
+    const handler = (_event: unknown, state: import("@t3tools/contracts").KeepAwakeState) =>
+      listener(state);
+    ipcRenderer.on("fork:keep-awake:state", handler);
+    return () => ipcRenderer.removeListener("fork:keep-awake:state", handler);
+  },
   getAppBranding: () => {
     const result = ipcRenderer.sendSync(IpcChannels.GET_APP_BRANDING_CHANNEL);
     if (typeof result !== "object" || result === null) {
