@@ -1,4 +1,4 @@
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import {
   DICTATION_MAX_BYTES,
   DICTATION_MAX_SECONDS,
@@ -58,7 +58,7 @@ export function validDictationWav(audio: Uint8Array): boolean {
 }
 
 const make = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const preferences = yield* AudioSettings.AudioSettings;
   const transcriber = yield* OpenRouterTranscriber.OpenRouterTranscriber;
   const assemblyAi = yield* AssemblyAiTranscriber.AssemblyAiTranscriber;
@@ -119,7 +119,7 @@ const make = Effect.gen(function* () {
         if (uploads.size >= 4 || [...uploads.values()].some((u) => u.owner === owner)) {
           return failure("A dictation is already active. Cancel it or try again later.");
         }
-        const uploadId = yield* crypto.randomUUIDv4().pipe(Effect.orDie);
+        const uploadId = yield* random.uuidV4();
         uploads.set(uploadId, {
           owner,
           chunks: [],

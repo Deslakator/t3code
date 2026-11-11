@@ -1,3 +1,4 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -79,7 +80,7 @@ const fixture = <A, E, R>(
     );
   });
 
-it.layer(NodeServices.layer)("DictationService", (it) => {
+it.layer(Layer.merge(NodeServices.layer, NodeCrypto.layer))("DictationService", (it) => {
   it.effect("routes AssemblyAI dictation through the selected provider and its key", () =>
     fixture(
       true,
