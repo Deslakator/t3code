@@ -36,6 +36,7 @@ export * from "./projectClone.ts";
 export * from "./speech.ts";
 export * from "./pullRequest.ts";
 export * from "./pullRequestReviewGuide.ts";
+export * from "./issue.ts";
 export * from "./orchestrationDispatch.ts";
 export * from "./orchestrationProject.ts";
 export * from "./orchestrationV2.ts";
@@ -73,6 +74,3 @@ export * from "./secretRequest.ts";
 export * from "./secretReference.ts";
 export * from "./settingsSecretValue.ts";
 export * from "./clientRpcPermissions.ts";
-
-export * from "./fork/keep-awake/bridge.ts";
-export { keepsMacAwake } from "./fork/keep-awake/activity.ts";
