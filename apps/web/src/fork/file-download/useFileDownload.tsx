@@ -1,3 +1,5 @@
+import { msg, useGT } from "gt-react";
+import { m } from "~/i18n/messages";
 import { useRef, useState } from "react";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
@@ -40,13 +42,13 @@ export function useFileDownload(environmentId: EnvironmentId | null, threadId?: 
       });
       if (result._tag === "Failure") throw squashAtomCommandFailure(result);
       const url = resolveAssetUrl(connection.value.httpBaseUrl, result.value.relativeUrl);
-      if (url === null) throw new Error("Reconnect to the environment and try again.");
+      if (url === null) throw new Error(m(msg("Reconnect to the environment and try again.")));
       await saveFileUrl(url, path);
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: "Could not download file",
-        description: error instanceof Error ? error.message : "Try again.",
+        title: m(msg("Could not download file")),
+        description: error instanceof Error ? error.message : m(msg("Try again.")),
       });
     } finally {
       pending.current = false;
@@ -61,11 +63,12 @@ export function FileDownloadAction(props: {
   path: string;
   threadId: ThreadId;
 }) {
+  const gt = useGT();
   const { available, saving, download } = useFileDownload(props.environmentId, props.threadId);
   if (!available) return null;
   return (
     <FileSurfaceAction
-      label={saving ? "Preparing file…" : "Save file"}
+      label={saving ? gt("Preparing file…") : gt("Save file")}
       disabled={saving}
       onPress={() => void download(props.path)}
     >

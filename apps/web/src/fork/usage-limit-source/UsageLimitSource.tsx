@@ -1,3 +1,4 @@
+import { useGT } from "gt-react";
 import type { LimitAccount } from "@t3tools/shared/usageLimits";
 
 export function UsageLimitSource({
@@ -7,6 +8,7 @@ export function UsageLimitSource({
   readonly account: LimitAccount;
   readonly column: number;
 }) {
+  const gt = useGT();
   const source =
     account.environments.length > 0
       ? account.environments.map((environment) => environment.label).join(", ")
@@ -19,8 +21,9 @@ export function UsageLimitSource({
       className="hidden min-w-0 px-2 text-2xs break-words text-muted-foreground @2xl/pool:block"
       style={{ gridColumn: column, gridRow: 2 }}
     >
-      {account.environments.length > 0 ? "Signed in: " : "Via: "}
-      {source}
+      {account.environments.length > 0
+        ? gt("Signed in: {source}", { source })
+        : gt("Via: {source}", { source })}
     </span>
   );
 }
