@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import { createDiffWorktreeReviewContext } from "./reviewContext";
 import { worktreeReviewSection } from "./reviewSection";
 import { useId, useState } from "react";
@@ -30,6 +31,7 @@ export function useDiffWorktree({
   defaultCwd: string | undefined;
   enabled: boolean;
 }) {
+  const gt = useGT();
   const instanceId = useId();
   const [open, setOpen] = useState(false);
   const [cursor, setCursor] = useState(0);
@@ -71,11 +73,11 @@ export function useDiffWorktree({
           <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
             <DropdownMenuTrigger
               render={<Button size="xs" variant="secondary" />}
-              aria-label="Diff worktree"
+              aria-label={gt("Diff worktree")}
             >
               <GitBranchIcon className="size-3.5" />
               <span className="max-w-28 truncate">
-                {selected ? selected.split(/[\\/]/).at(-1) : "Thread folder"}
+                {selected ? selected.split(/[\\/]/).at(-1) : gt("Thread folder")}
               </span>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -91,7 +93,9 @@ export function useDiffWorktree({
           >
             <DropdownMenuRadioItem value="" closeOnClick>
               <span className="flex min-w-0 flex-col">
-                <span>Thread folder</span>
+                <span>
+                  <T>Thread folder</T>
+                </span>
                 <span className="max-w-96 whitespace-normal break-all text-xs text-muted-foreground">
                   {defaultCwd}
                 </span>
@@ -113,18 +117,24 @@ export function useDiffWorktree({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
-          {refs.isPending ? <DropdownMenuItem disabled>Loading worktrees…</DropdownMenuItem> : null}
+          {refs.isPending ? (
+            <DropdownMenuItem disabled>
+              <T>Loading worktrees…</T>
+            </DropdownMenuItem>
+          ) : null}
           {refs.error ? (
             <DropdownMenuItem onClick={refs.refresh}>
-              Could not load worktrees. Retry
+              <T>Could not load worktrees. Retry</T>
             </DropdownMenuItem>
           ) : null}
           {cursor > 0 ? (
-            <DropdownMenuItem onClick={() => setCursor(0)}>First page</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setCursor(0)}>
+              <T>First page</T>
+            </DropdownMenuItem>
           ) : null}
           {nextCursor != null ? (
             <DropdownMenuItem onClick={() => setCursor(nextCursor)}>
-              More branches…
+              <T>More branches…</T>
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>

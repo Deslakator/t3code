@@ -1,3 +1,5 @@
+import { msg } from "gt-react";
+import { m } from "~/i18n/messages";
 import type { ContextMenuItem, EnvironmentId } from "@t3tools/contracts";
 import type { FileContextMenuAction as BaseAction, FileContextMenuTarget } from "~/fileContextMenu";
 
@@ -19,7 +21,14 @@ export function downloadFileContextMenu(
       : null;
   return {
     buildItems: (target: Target): readonly ContextMenuItem<FileContextMenuAction>[] => [
-      ...(downloadPath(target) !== null ? [{ id: "download" as const, label: "Download" }] : []),
+      ...(downloadPath(target) !== null
+        ? [
+            {
+              id: "download" as const,
+              label: m(msg("Download", { $context: "verb, downloads a file" })),
+            },
+          ]
+        : []),
       ...base.buildItems(target),
     ],
     activate: async (action: FileContextMenuAction, target: Target) => {
