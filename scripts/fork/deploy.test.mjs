@@ -85,7 +85,7 @@ test("rollback refuses a concurrent update and an unrelated active version witho
     NodeFS.writeFileSync(stateFile, pending);
     await NodeAssert.rejects(main(["rollback"]), /another update/);
     NodeAssert.equal(NodeFS.readFileSync(stateFile, "utf8"), pending);
-    const changed = JSON.stringify({ protocol: 3, activeVersion: "0.1.4" });
+    const changed = JSON.stringify({ protocol: 4, activeVersion: "0.1.4" });
     NodeFS.writeFileSync(stateFile, changed);
     await NodeAssert.rejects(main(["rollback"]), /no longer runs this deployment/);
     NodeAssert.equal(NodeFS.readFileSync(stateFile, "utf8"), changed);

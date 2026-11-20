@@ -135,7 +135,7 @@ async function build(sha, branch, signal) {
 
 function serviceState(home) {
   const state = readJson(NodePath.join(home, "runtime/service-state.json"));
-  if (state.protocol !== 3 || state.update?.status === "pending") {
+  if ((state.protocol !== 3 && state.protocol !== 4) || state.update?.status === "pending") {
     throw new Error("Unsupported launcher protocol or another update is in progress.");
   }
   if (!runtimeVersion.test(state.activeVersion)) throw new Error("Invalid active runtime version.");
